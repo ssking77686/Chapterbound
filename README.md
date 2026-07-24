@@ -19,6 +19,9 @@
 
 - **书架管理** — 导入、浏览、删除电子书，自动提取封面和元数据
 - **阅读进度** — 自动保存阅读位置，下次打开自动恢复
+- **阅读设置** — 字号、字体、行间距实时调节，偏好持久化
+- **明暗主题** — 手动切换或跟随系统，暖色调暗夜模式
+- **自适应宽屏** — 支持 34 寸带鱼屏双页展开，响应式列数
 - **书签** — 添加和管理书签，快速跳转
 - **高亮与笔记** — 选中文字添加高亮标注，支持 CFI 精确定位
 - **目录导航** — 解析书籍目录，一键跳转章节
@@ -42,6 +45,7 @@
 | 数据库 | Dexie.js (IndexedDB) |
 | 样式 | Tailwind CSS v4 |
 | EPUB 渲染 | epub.js |
+| 动效 | motion |
 | PDF 渲染 | pdf.js |
 | 图标 | Lucide React |
 
@@ -89,6 +93,9 @@ E-Reader is a web-first eBook reading application supporting EPUB, PDF, TXT, and
 
 - **Library Management** — Import, browse, and delete books with automatic cover and metadata extraction
 - **Reading Progress** — Auto-saves reading position, restores on next open
+- **Reading Settings** — Real-time font size, family, and line spacing adjustment with persistence
+- **Light/Dark Theme** — Manual toggle or follow system preference with warm dark palette
+- **Ultrawide Support** — Dual-page spread on 34" monitors, responsive grid columns
 - **Bookmarks** — Add and manage bookmarks with quick navigation
 - **Highlights & Notes** — Select text to highlight with precise CFI positioning
 - **Table of Contents** — Parse book TOC for one-click chapter navigation
@@ -112,6 +119,8 @@ E-Reader is a web-first eBook reading application supporting EPUB, PDF, TXT, and
 | Database | Dexie.js (IndexedDB) |
 | Styling | Tailwind CSS v4 |
 | EPUB | epub.js |
+| PDF | pdf.js |
+| Animation | motion |
 | PDF | pdf.js |
 | Icons | Lucide React |
 
