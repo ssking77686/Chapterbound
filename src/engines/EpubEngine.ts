@@ -125,6 +125,15 @@ export class EpubEngine implements IReaderEngine {
     this.rendition?.annotations.remove(cfiRange, 'highlight')
   }
 
+  applySettings(settings: { fontSize: number; fontFamily: string; lineHeight: number }): void {
+    if (!this.rendition) return
+    this.rendition.themes.fontSize(`${settings.fontSize}px`)
+    if (settings.fontFamily) {
+      this.rendition.themes.font(settings.fontFamily)
+    }
+    this.rendition.themes.override('line-height', String(settings.lineHeight))
+  }
+
   setTheme(theme: 'light' | 'dark'): void {
     if (!this.rendition) return
     if (theme === 'dark') {

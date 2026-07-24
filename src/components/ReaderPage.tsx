@@ -5,8 +5,9 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
+import { useSettingsStore } from '../stores/settingsStore'
 import type { TOCItem } from '../core/types'
 
 interface Props {
@@ -20,13 +21,14 @@ const springSlide = { type: 'spring' as const, bounce: 0.15, duration: 0.3 }
 
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { nextPage, prevPage, getEngine, pageInfo } = useReader(bookId, containerRef)
+  const { nextPage, prevPage, getEngine, pageInfo, applySettings } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
+  const { settings, updateSettings } = useSettingsStore()
 
   const [toc, setToc] = useState<TOCItem[]>([])
-  const [showToc, setShowToc] = useState(false)
+  const [sidebarTab, setSidebarTab] = useState<'toc' | 'settings' | null>(null)
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pageKey, setPageKey] = useState(0)
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
@@ -74,7 +76,12 @@ export function ReaderPage({ bookId, onBack }: Props) {
     if (!engine) return
     const items = await engine.getTOC()
     setToc(items)
-    setShowToc(true)
+    setSidebarTab('toc')
+  }
+
+  const handleSettingsChange = (patch: Partial<typeof settings>) => {
+    updateSettings(patch)
+    applySettings({ ...settings, ...patch })
   }
 
   const toolbarBg = 'var(--color-toolbar)'
@@ -170,6 +177,17 @@ export function ReaderPage({ bookId, onBack }: Props) {
           aria-label="目录"
         >
           <List className="h-5 w-5" />
+        </motion.button>
+        <motion.button
+          onClick={() => setSidebarTab('settings')}
+          className="rounded-full p-2.5"
+          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+          whileTap={{ scale: 0.94 }}
+          transition={springPress}
+          style={{ color: 'var(--color-text)' }}
+          aria-label="设置"
+        >
+          <Settings className="h-5 w-5" />
         </motion.button>
       </motion.header>
 
@@ -306,9 +324,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
         )}
       </AnimatePresence>
 
-      {/* TOC 侧栏 — spring 滑入 */}
+      {/* 侧栏 — spring 滑入（目录 / 设置） */}
       <AnimatePresence>
-        {showToc && (
+        {sidebarTab !== null && (
           <div className="fixed inset-0 z-20 flex">
             <motion.div
               className="flex-1"
@@ -317,10 +335,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               style={{ background: 'rgba(60,50,38,0.15)' }}
-              onClick={() => setShowToc(false)}
+              onClick={() => setSidebarTab(null)}
             />
             <motion.nav
-              className="w-72 overflow-y-auto p-5"
+              className="w-72 overflow-y-auto"
               style={{
                 background: toolbarBg,
                 backdropFilter: toolbarBlur,
@@ -332,31 +350,150 @@ export function ReaderPage({ bookId, onBack }: Props) {
               exit={{ x: 288 }}
               transition={springSlide}
             >
-              <h3
-                className="mb-5 text-lg font-bold tracking-[-0.01em]"
-                style={{ color: 'var(--color-text)', lineHeight: 1.15 }}
+              {/* Tab 栏 */}
+              <div
+                className="flex border-b px-5 pt-5 pb-0"
+                style={{ borderColor: 'var(--color-separator)' }}
               >
-                目录
-              </h3>
-              {toc.map((item, i) => (
-                <motion.button
-                  key={i}
-                  className="block w-full rounded-lg py-2.5 text-left text-sm font-medium"
-                  style={{
-                    paddingLeft: item.level * 14 + 8,
-                    color: 'var(--color-text)',
-                  }}
-                  whileHover={{ background: 'rgba(60,50,38,0.05)' }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={springPress}
-                  onClick={() => {
-                    getEngine()?.goToLocation(item.href)
-                    setShowToc(false)
-                  }}
-                >
-                  {item.label}
-                </motion.button>
-              ))}
+                {(['toc', 'settings'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    className="relative flex-1 pb-3 text-sm font-medium transition-colors"
+                    style={{
+                      color: sidebarTab === tab ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    }}
+                    onClick={() => setSidebarTab(tab)}
+                  >
+                    {tab === 'toc' ? '目录' : '设置'}
+                    {sidebarTab === tab && (
+                      <motion.div
+                        layoutId="sidebar-tab-indicator"
+                        className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                        style={{ background: 'var(--color-accent)' }}
+                        transition={springDefault}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* 目录面板 */}
+              {sidebarTab === 'toc' && (
+                <div className="p-5">
+                  {toc.map((item, i) => (
+                    <motion.button
+                      key={i}
+                      className="block w-full rounded-lg py-2.5 text-left text-sm font-medium"
+                      style={{
+                        paddingLeft: item.level * 14 + 8,
+                        color: 'var(--color-text)',
+                      }}
+                      whileHover={{ background: 'rgba(60,50,38,0.05)' }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={springPress}
+                      onClick={() => {
+                        getEngine()?.goToLocation(item.href)
+                        setSidebarTab(null)
+                      }}
+                    >
+                      {item.label}
+                    </motion.button>
+                  ))}
+                </div>
+              )}
+
+              {/* 设置面板 */}
+              {sidebarTab === 'settings' && (
+                <div className="flex flex-col gap-6 p-5">
+                  {/* 字号 */}
+                  <div>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      字号
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>12</span>
+                      <input
+                        type="range"
+                        min="12"
+                        max="24"
+                        step="1"
+                        value={settings.fontSize}
+                        onChange={(e) => handleSettingsChange({ fontSize: Number(e.target.value) })}
+                        className="flex-1"
+                        style={{ accentColor: 'var(--color-accent)' }}
+                      />
+                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>24</span>
+                    </div>
+                    <p
+                      className="mt-1 text-center text-xs"
+                      style={{ color: 'var(--color-text)' }}
+                    >
+                      {settings.fontSize}px
+                    </p>
+                  </div>
+
+                  {/* 字体 */}
+                  <div>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      字体
+                    </p>
+                    <select
+                      value={settings.fontFamily}
+                      onChange={(e) => handleSettingsChange({ fontFamily: e.target.value })}
+                      className="w-full rounded-lg px-3 py-2.5 text-sm font-medium"
+                      style={{
+                        background: 'var(--color-card)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-separator)',
+                      }}
+                    >
+                      <option value="">系统默认</option>
+                      <option value="serif">宋体</option>
+                      <option value="'KaiTi', 'STKaiti', serif">楷体</option>
+                      <option value="'SimHei', 'Heiti SC', sans-serif">黑体</option>
+                    </select>
+                  </div>
+
+                  {/* 行间距 */}
+                  <div>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      行间距
+                    </p>
+                    <div className="flex gap-2">
+                      {[
+                        { label: '紧凑', value: 1.4 },
+                        { label: '标准', value: 1.8 },
+                        { label: '宽松', value: 2.2 },
+                      ].map((opt) => (
+                        <motion.button
+                          key={opt.value}
+                          className="flex-1 rounded-lg px-3 py-2 text-sm font-medium"
+                          style={{
+                            background: settings.lineHeight === opt.value ? 'var(--color-accent)' : 'var(--color-card)',
+                            color: settings.lineHeight === opt.value ? '#fff' : 'var(--color-text)',
+                            border: settings.lineHeight === opt.value ? 'none' : '1px solid var(--color-separator)',
+                          }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          transition={springPress}
+                          onClick={() => handleSettingsChange({ lineHeight: opt.value })}
+                        >
+                          {opt.label}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.nav>
           </div>
         )}
