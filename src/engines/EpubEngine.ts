@@ -22,7 +22,7 @@ export class EpubEngine implements IReaderEngine {
     this.rendition = this.book.renderTo(container, {
       width: rect.width || 800,
       height: rect.height || 600,
-      spread: 'none',
+      spread: 'auto',
       flow: 'paginated',
       allowScriptedContent: true,
     })
@@ -134,6 +134,10 @@ export class EpubEngine implements IReaderEngine {
       this.rendition.themes.override('color', '#3C3226')
       this.rendition.themes.override('background', '#FDFBF7')
     }
+  }
+
+  resize(width: number, height: number): void {
+    this.rendition?.resize(width, height)
   }
 
   // ── private ──

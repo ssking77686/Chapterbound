@@ -59,5 +59,18 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const prevPage = useCallback(() => engineRef.current?.prevPage(), [])
   const getEngine = useCallback(() => engineRef.current, [])
 
+  // 窗口 resize 时重新分页
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || pageInfo.total === 0) return
+
+    const ro = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect
+      if (rect) engineRef.current?.resize(rect.width, rect.height)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [pageInfo.total, containerRef])
+
   return { nextPage, prevPage, getEngine, pageInfo }
 }

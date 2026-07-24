@@ -63,7 +63,7 @@ export function LibraryPage({ onOpenBook }: Props) {
           boxShadow: scrolled ? '0 1px 0 0 var(--color-separator)' : 'none',
         }}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-2">
+        <div className="mx-auto flex max-w-[1800px] items-center justify-between px-2">
           <h1
             className="text-3xl font-bold tracking-[-0.015em]"
             style={{ color: 'var(--color-text)', lineHeight: 1.15 }}
@@ -103,7 +103,7 @@ export function LibraryPage({ onOpenBook }: Props) {
         </div>
       </motion.header>
 
-      <main className="mx-auto max-w-6xl px-4 pt-6 pb-12">
+      <main className="mx-auto max-w-[1800px] px-4 pt-6 pb-12">
         {loading ? (
           <div className="mt-20 text-center" style={{ color: 'var(--color-text-secondary)' }}>
             加载中...
@@ -127,7 +127,7 @@ export function LibraryPage({ onOpenBook }: Props) {
           </motion.div>
         ) : (
           <motion.div
-            className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+            className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8"
             initial="hidden"
             animate="show"
             variants={{

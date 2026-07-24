@@ -177,7 +177,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
         {/* 阅读卡片 */}
         <div
-          className="mx-auto h-full max-w-3xl"
+          className="mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
           style={{
             background: 'var(--color-card)',
             borderRadius: 'var(--radius-card)',
