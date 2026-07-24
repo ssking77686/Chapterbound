@@ -1,7 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --color-page-bg: #F5F1EA;
+  --color-card: #FDFBF7;
+  --color-toolbar: rgba(245, 241, 234, 0.75);
+  --color-text: #3C3226;
+  --color-text-secondary: #9B8E7E;
+  --color-separator: rgba(60, 50, 38, 0.10);
+  --color-accent: #B87C4B;
+  --color-bookmark: #C8694A;
+  --color-danger: #C84040;
+  --shadow-card: 0 1px 3px rgba(60, 50, 38, 0.05), 0 1px 2px rgba(60, 50, 38, 0.04);
+  --shadow-float: 0 8px 24px rgba(60, 50, 38, 0.10), 0 2px 6px rgba(60, 50, 38, 0.05);
+  --radius-card: 16px;
+  --radius-full: 9999px;
+}
+
 body {
   margin: 0;
+  background: var(--color-page-bg);
+  color: var(--color-text);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
