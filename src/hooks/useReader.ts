@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { EpubEngine } from '../engines/EpubEngine'
 import { registry } from '../core/registry'
 import { useProgressStore } from '../stores/progressStore'
+import { useSettingsStore } from '../stores/settingsStore'
 
 export interface PageInfo {
   current: number
@@ -30,6 +31,8 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
       }
 
       engine.on('ready', () => {
+        const settings = useSettingsStore.getState().settings
+        engine.applySettings(settings)
         loadProgress(bookId).then(() => {
           const p = useProgressStore.getState().current
           if (p?.location) {
@@ -58,6 +61,9 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const nextPage = useCallback(() => engineRef.current?.nextPage(), [])
   const prevPage = useCallback(() => engineRef.current?.prevPage(), [])
   const getEngine = useCallback(() => engineRef.current, [])
+  const applySettings = useCallback((settings: { fontSize: number; fontFamily: string; lineHeight: number }) => {
+    engineRef.current?.applySettings(settings)
+  }, [])
 
   // 窗口 resize 时重新分页
   useEffect(() => {
@@ -72,5 +78,5 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
     return () => ro.disconnect()
   }, [pageInfo.total, containerRef])
 
-  return { nextPage, prevPage, getEngine, pageInfo }
+  return { nextPage, prevPage, getEngine, pageInfo, applySettings }
 }
