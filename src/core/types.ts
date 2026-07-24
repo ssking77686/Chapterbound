@@ -1,14 +1,16 @@
 // 支持的书籍格式
-export enum BookFormat {
-  EPUB = 'epub',
-  PDF = 'pdf',
-  TXT = 'txt',
-  MOBI = 'mobi',
-  AZW3 = 'azw3',
-  CBZ = 'cbz',
-  MARKDOWN = 'markdown',
-  UNKNOWN = 'unknown',
-}
+export const BookFormat = {
+  EPUB: 'epub',
+  PDF: 'pdf',
+  TXT: 'txt',
+  MOBI: 'mobi',
+  AZW3: 'azw3',
+  CBZ: 'cbz',
+  MARKDOWN: 'markdown',
+  UNKNOWN: 'unknown',
+} as const
+
+export type BookFormat = (typeof BookFormat)[keyof typeof BookFormat]
 
 // 书架上的书籍记录
 export interface BookRecord {
