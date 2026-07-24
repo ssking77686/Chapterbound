@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, useAnimate } from 'motion/react'
 import { useReader } from '../hooks/useReader'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
@@ -34,6 +34,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnDirection = useRef(0)
+  const [cardScope, cardAnimate] = useAnimate()
   const { toggle: toggleTheme, isDark } = useTheme()
 
   const handleNext = useCallback(() => {
@@ -57,6 +58,16 @@ export function ReaderPage({ bookId, onBack }: Props) {
   useEffect(() => {
     setPageKey((k) => k + 1)
   }, [pageInfo.current])
+
+  useEffect(() => {
+    if (pageKey === 0) return
+    const dir = turnDirection.current
+    if (dir === 0) return
+    cardAnimate(cardScope.current,
+      { x: [dir * 24, 0], opacity: [0.6, 1] },
+      { type: 'spring', bounce: 0, duration: 0.3 },
+    )
+  }, [pageKey])
 
   // 暗夜模式切换时更新 iframe 内文字颜色
   useEffect(() => {
@@ -206,12 +217,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
         {/* 阅读卡片 — 翻页滑入动效 */}
         <motion.div
-          key={pageKey}
-          initial={turnDirection.current === 0
-            ? { opacity: 1 }
-            : { x: turnDirection.current * 24, opacity: 0.6 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+          ref={cardScope}
           className="mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
           style={{
             background: 'var(--color-card)',
