@@ -125,6 +125,17 @@ export class EpubEngine implements IReaderEngine {
     this.rendition?.annotations.remove(cfiRange, 'highlight')
   }
 
+  setTheme(theme: 'light' | 'dark'): void {
+    if (!this.rendition) return
+    if (theme === 'dark') {
+      this.rendition.themes.override('color', '#F5EFE6')
+      this.rendition.themes.override('background', '#2B2420')
+    } else {
+      this.rendition.themes.override('color', '#3C3226')
+      this.rendition.themes.override('background', '#FDFBF7')
+    }
+  }
+
   // ── private ──
 
   private emit(event: string, ...args: unknown[]): void {
