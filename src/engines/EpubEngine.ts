@@ -22,7 +22,7 @@ export class EpubEngine implements IReaderEngine {
     this.rendition = this.book.renderTo(container, {
       width: rect.width || 800,
       height: rect.height || 600,
-      spread: 'none',
+      spread: 'auto',
       flow: 'paginated',
       allowScriptedContent: true,
     })
