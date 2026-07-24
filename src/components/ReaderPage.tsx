@@ -29,6 +29,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [showToc, setShowToc] = useState(false)
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pageKey, setPageKey] = useState(0)
+  const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { toggle: toggleTheme, isDark } = useTheme()
 
@@ -182,6 +183,15 @@ export function ReaderPage({ bookId, onBack }: Props) {
             borderRadius: 'var(--radius-card)',
             boxShadow: 'var(--shadow-card)',
           }}
+          onMouseMove={(e) => {
+            resetHideTimer()
+            const rect = e.currentTarget.getBoundingClientRect()
+            const x = e.clientX - rect.left
+            if (x < 60) setHoveredEdge('left')
+            else if (x > rect.width - 60) setHoveredEdge('right')
+            else setHoveredEdge(null)
+          }}
+          onMouseLeave={() => setHoveredEdge(null)}
           onClick={(e) => {
             const { clientX, currentTarget } = e
             const mid = currentTarget.clientWidth / 2
@@ -192,32 +202,80 @@ export function ReaderPage({ bookId, onBack }: Props) {
           <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
         </div>
 
-        {/* 左翻页按钮 */}
+        {/* 左边缘高亮区域 */}
+        <motion.div
+          className="pointer-events-none absolute left-0 z-10 rounded-l-2xl"
+          style={{
+            top: 8,
+            bottom: 8,
+            width: 80,
+            background: isDark
+              ? 'radial-gradient(ellipse 120% 50% at 8px 50%, rgba(212,153,106,0.22) 0%, rgba(212,153,106,0.08) 45%, transparent 80%)'
+              : 'linear-gradient(to right, rgba(184,124,75,0.08), transparent)',
+          }}
+          animate={{
+            opacity: toolbarVisible ? 0 : hoveredEdge === 'left' ? 1 : 0.4,
+          }}
+          transition={{ duration: 0.35 }}
+        />
+
+        {/* 左翻页按钮 — 全高长条 */}
         <motion.button
           onClick={prevPage}
-          className="absolute left-6 top-1/2 z-10 -translate-y-1/2 rounded-full p-3 opacity-0"
-          style={navButtonClass}
-          whileHover={{ scale: 1.12, opacity: 1 }}
-          whileTap={{ scale: 0.9 }}
+          className="absolute left-2 z-10 flex items-center justify-center rounded-2xl px-1"
+          style={{
+            top: 8,
+            bottom: 8,
+            ...navButtonClass,
+            opacity: undefined as unknown as string,
+          }}
+          whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
+          whileTap={{ scale: 0.96 }}
           transition={springDefault}
-          animate={{ opacity: toolbarVisible ? 0 : undefined }}
+          animate={{
+            opacity: toolbarVisible ? 0 : hoveredEdge === 'left' ? 0.85 : 0.2,
+          }}
           aria-label="上一页"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-4 w-4" />
         </motion.button>
 
-        {/* 右翻页按钮 */}
+        {/* 右边缘高亮区域 */}
+        <motion.div
+          className="pointer-events-none absolute right-0 z-10 rounded-r-2xl"
+          style={{
+            top: 8,
+            bottom: 8,
+            width: 80,
+            background: isDark
+              ? 'radial-gradient(ellipse 120% 50% at calc(100% - 8px) 50%, rgba(212,153,106,0.22) 0%, rgba(212,153,106,0.08) 45%, transparent 80%)'
+              : 'linear-gradient(to left, rgba(184,124,75,0.08), transparent)',
+          }}
+          animate={{
+            opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 1 : 0.4,
+          }}
+          transition={{ duration: 0.35 }}
+        />
+
+        {/* 右翻页按钮 — 全高长条 */}
         <motion.button
           onClick={nextPage}
-          className="absolute right-6 top-1/2 z-10 -translate-y-1/2 rounded-full p-3 opacity-0"
-          style={navButtonClass}
-          whileHover={{ scale: 1.12, opacity: 1 }}
-          whileTap={{ scale: 0.9 }}
+          className="absolute right-2 z-10 flex items-center justify-center rounded-2xl px-1"
+          style={{
+            top: 8,
+            bottom: 8,
+            ...navButtonClass,
+            opacity: undefined as unknown as string,
+          }}
+          whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
+          whileTap={{ scale: 0.96 }}
           transition={springDefault}
-          animate={{ opacity: toolbarVisible ? 0 : undefined }}
+          animate={{
+            opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
+          }}
           aria-label="下一页"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-4 w-4" />
         </motion.button>
       </div>
 
