@@ -18,11 +18,13 @@ export class EpubEngine implements IReaderEngine {
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     this.book = Epub(data) as Book
 
+    const rect = container.getBoundingClientRect()
     this.rendition = this.book.renderTo(container, {
-      width: '100%',
-      height: '100%',
+      width: rect.width || 800,
+      height: rect.height || 600,
       spread: 'none',
       flow: 'paginated',
+      allowScriptedContent: true,
     })
 
     this.rendition.on('relocated', (location: {
