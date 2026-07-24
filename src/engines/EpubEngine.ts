@@ -44,7 +44,6 @@ export class EpubEngine implements IReaderEngine {
     })
 
     await this.book.ready
-    await this.book.locations.generate(150)
     await this.rendition.display()
     this.emit('ready')
   }
