@@ -1,14 +1,18 @@
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="border-b bg-white px-6 py-4">
-        <h1 className="text-xl font-semibold">电子阅读器</h1>
-      </header>
-      <main className="mx-auto max-w-6xl p-6">
-        <p className="text-gray-500">项目骨架搭建完成，等待下一步。</p>
-      </main>
-    </div>
-  )
-}
+import { useState } from 'react'
+import { LibraryPage } from './components/LibraryPage'
+import { ReaderPage } from './components/ReaderPage'
 
-export default App
+export default function App() {
+  const [readingBookId, setReadingBookId] = useState<string | null>(null)
+
+  if (readingBookId) {
+    return (
+      <ReaderPage
+        bookId={readingBookId}
+        onBack={() => setReadingBookId(null)}
+      />
+    )
+  }
+
+  return <LibraryPage onOpenBook={setReadingBookId} />
+}
