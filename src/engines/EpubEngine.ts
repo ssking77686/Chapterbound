@@ -136,6 +136,10 @@ export class EpubEngine implements IReaderEngine {
     }
   }
 
+  resize(width: number, height: number): void {
+    this.rendition?.resize(width, height)
+  }
+
   // ── private ──
 
   private emit(event: string, ...args: unknown[]): void {
