@@ -22,4 +22,15 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
+# Binary build artifacts (PWA / Tauri / Capacitor)
+*.exe
+*.dmg
+*.apk
+*.aab
+*.app
+*.deb
+*.rpm
+*.AppImage
+*.msi
 *.sw?
+
