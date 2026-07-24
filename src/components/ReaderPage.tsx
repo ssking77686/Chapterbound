@@ -33,9 +33,20 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [pageKey, setPageKey] = useState(0)
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const turnDirection = useRef(0)
   const { toggle: toggleTheme, isDark } = useTheme()
 
-  useKeyboard({ onPrev: prevPage, onNext: nextPage })
+  const handleNext = useCallback(() => {
+    turnDirection.current = 1
+    nextPage()
+  }, [nextPage])
+
+  const handlePrev = useCallback(() => {
+    turnDirection.current = -1
+    prevPage()
+  }, [prevPage])
+
+  useKeyboard({ onPrev: handlePrev, onNext: handleNext })
 
   useEffect(() => {
     loadBookmarks(bookId)
@@ -193,8 +204,14 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
       {/* 阅读区域 */}
       <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
-        {/* 阅读卡片 */}
-        <div
+        {/* 阅读卡片 — 翻页滑入动效 */}
+        <motion.div
+          key={pageKey}
+          initial={turnDirection.current === 0
+            ? { opacity: 1 }
+            : { x: turnDirection.current * 24, opacity: 0.6 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
           className="mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
           style={{
             background: 'var(--color-card)',
@@ -213,12 +230,12 @@ export function ReaderPage({ bookId, onBack }: Props) {
           onClick={(e) => {
             const { clientX, currentTarget } = e
             const mid = currentTarget.clientWidth / 2
-            if (clientX < mid) prevPage()
-            else nextPage()
+            if (clientX < mid) handlePrev()
+            else handleNext()
           }}
         >
           <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
-        </div>
+        </motion.div>
 
         {/* 左边缘高亮区域 */}
         <motion.div
@@ -239,7 +256,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
         {/* 左翻页按钮 — 全高长条 */}
         <motion.button
-          onClick={prevPage}
+          onClick={handlePrev}
           className="absolute left-2 z-10 flex items-center justify-center rounded-2xl px-1"
           style={{
             top: 8,
@@ -277,7 +294,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
         {/* 右翻页按钮 — 全高长条 */}
         <motion.button
-          onClick={nextPage}
+          onClick={handleNext}
           className="absolute right-2 z-10 flex items-center justify-center rounded-2xl px-1"
           style={{
             top: 8,
