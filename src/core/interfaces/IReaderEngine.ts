@@ -16,9 +16,7 @@ export interface IReaderEngine {
   getTOC(): Promise<TOCItem[]>
   getCover(): Promise<Blob | null>
 
-  on(event: 'locationChange', cb: (loc: string, progress: number) => void): void
-  on(event: 'selection', cb: (text: string, cfiRange: string) => void): void
-  on(event: 'ready', cb: () => void): void
+  on(event: string, cb: (...args: unknown[]) => void): void
   off(event: string, cb: (...args: unknown[]) => void): void
 
   addHighlight(cfiRange: string, color: string): void

@@ -73,7 +73,7 @@ export interface RouteConfig {
 export interface BookMetadata {
   title: string
   author: string
-  cover?: Blob
+  cover?: Blob | null
   format: BookFormat
   language?: string
   publisher?: string
