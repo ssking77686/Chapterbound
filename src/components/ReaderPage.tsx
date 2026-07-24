@@ -5,7 +5,8 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react'
+import { useTheme } from '../hooks/useTheme'
 import type { TOCItem } from '../core/types'
 
 interface Props {
@@ -29,6 +30,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pageKey, setPageKey] = useState(0)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { toggle: toggleTheme, isDark } = useTheme()
 
   useKeyboard({ onPrev: prevPage, onNext: nextPage })
 
@@ -140,6 +142,17 @@ export function ReaderPage({ bookId, onBack }: Props) {
           aria-label="高亮"
         >
           <Highlighter className="h-5 w-5" />
+        </motion.button>
+        <motion.button
+          onClick={toggleTheme}
+          className="rounded-full p-2.5"
+          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+          whileTap={{ scale: 0.94 }}
+          transition={springPress}
+          style={{ color: 'var(--color-text)' }}
+          aria-label={isDark ? '切换日间模式' : '切换暗夜模式'}
+        >
+          {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </motion.button>
         <motion.button
           onClick={handleShowToc}

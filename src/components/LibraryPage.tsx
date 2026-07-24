@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useBookshelfStore } from '../stores/bookshelfStore'
-import { BookOpen, Trash2, Plus } from 'lucide-react'
+import { BookOpen, Trash2, Plus, Sun, Moon } from 'lucide-react'
+import { useTheme } from '../hooks/useTheme'
 
 interface Props {
   onOpenBook: (id: string) => void
@@ -13,6 +14,7 @@ const springPop = { type: 'spring' as const, bounce: 0.15, duration: 0.3 }
 
 export function LibraryPage({ onOpenBook }: Props) {
   const { books, loading, loadBooks, importBook, removeBook } = useBookshelfStore()
+  const { toggle: toggleTheme, isDark } = useTheme()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [scrolled, setScrolled] = useState(false)
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
@@ -68,7 +70,19 @@ export function LibraryPage({ onOpenBook }: Props) {
           >
             我的书架
           </h1>
-          <motion.label
+          <div className="flex items-center gap-2">
+            <motion.button
+              onClick={toggleTheme}
+              className="rounded-full p-2.5"
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.9 }}
+              transition={springPress}
+              style={{ color: 'var(--color-text)' }}
+              aria-label={isDark ? '切换日间模式' : '切换暗夜模式'}
+            >
+              {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </motion.button>
+            <motion.label
             className="inline-flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white"
             style={{ background: 'var(--color-accent)' }}
             whileHover={{ scale: 1.03 }}
@@ -85,6 +99,7 @@ export function LibraryPage({ onOpenBook }: Props) {
               className="hidden"
             />
           </motion.label>
+          </div>
         </div>
       </motion.header>
 
