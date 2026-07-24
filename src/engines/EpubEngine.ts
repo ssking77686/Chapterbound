@@ -25,10 +25,15 @@ export class EpubEngine implements IReaderEngine {
       flow: 'paginated',
     })
 
-    this.rendition.on('relocated', (location: { start: { cfi: string }; end: { cfi: string } }) => {
+    this.rendition.on('relocated', (location: {
+      start: { cfi: string; displayed: { page: number; total: number } }
+      end: { cfi: string }
+    }) => {
       const cfi = location.start.cfi
       const progress = this.computeProgress(cfi)
-      this.emit('locationChange', cfi, progress)
+      const page = location.start.displayed.page
+      const total = location.start.displayed.total
+      this.emit('locationChange', cfi, progress, page, total)
     })
 
     this.rendition.on('selected', (cfiRange: string, contents: { window: { getSelection: () => Selection } }) => {

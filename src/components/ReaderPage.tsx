@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect } from 'react'
 import { useReader } from '../hooks/useReader'
+import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { TOCItem } from '../core/types'
 
 interface Props {
@@ -13,13 +14,15 @@ interface Props {
 
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { nextPage, prevPage, getEngine } = useReader(bookId, containerRef)
+  const { nextPage, prevPage, getEngine, pageInfo } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
 
   const [toc, setToc] = useState<TOCItem[]>([])
   const [showToc, setShowToc] = useState(false)
+
+  useKeyboard({ onPrev: prevPage, onNext: nextPage })
 
   useEffect(() => {
     loadBookmarks(bookId)
@@ -61,10 +64,29 @@ export function ReaderPage({ bookId, onBack }: Props) {
       </header>
 
       {/* Reading area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
+        {/* Floating nav — left */}
+        <button
+          onClick={prevPage}
+          className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-xl bg-black/10 p-3 text-gray-700 opacity-0 backdrop-blur transition-all hover:bg-black/20 hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
+          aria-label="上一页"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+
+        {/* Floating nav — right */}
+        <button
+          onClick={nextPage}
+          className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-xl bg-black/10 p-3 text-gray-700 opacity-0 backdrop-blur transition-all hover:bg-black/20 hover:opacity-100 focus:opacity-100"
+          aria-label="下一页"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+
+        {/* Book container */}
         <div
           ref={containerRef}
-          className="mx-auto h-full max-w-3xl bg-white shadow-lg"
+          className="group mx-auto h-full max-w-3xl bg-white shadow-lg"
           onClick={(e) => {
             const { clientX, currentTarget } = e
             const mid = currentTarget.clientWidth / 2
@@ -73,6 +95,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
         />
       </div>
+
+      {/* Page indicator */}
+      {pageInfo.total > 0 && (
+        <footer className="border-t bg-white px-4 py-1.5 text-center text-xs text-gray-400">
+          {pageInfo.current} / {pageInfo.total}
+        </footer>
+      )}
 
       {/* TOC sidebar */}
       {showToc && (
@@ -96,11 +125,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
           </nav>
         </div>
       )}
-
-      {/* Bottom page indicator */}
-      <footer className="border-t bg-white px-4 py-1 text-center text-xs text-gray-400">
-        点击左侧翻上一页，右侧翻下一页
-      </footer>
     </div>
   )
 }
