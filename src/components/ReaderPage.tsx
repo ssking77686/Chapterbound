@@ -44,6 +44,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setPageKey((k) => k + 1)
   }, [pageInfo.current])
 
+  // 暗夜模式切换时更新 iframe 内文字颜色
+  useEffect(() => {
+    getEngine()?.setTheme(isDark ? 'dark' : 'light')
+  }, [isDark, pageInfo.total, getEngine])
+
   const resetHideTimer = useCallback(() => {
     setToolbarVisible(true)
     if (hideTimer.current) clearTimeout(hideTimer.current)
