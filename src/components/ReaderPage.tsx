@@ -332,7 +332,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         {/* 阅读卡片 — 翻页滑入动效 */}
         <motion.div
           ref={cardScope}
-          className="mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
+          className="relative mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
           style={{
             background: 'var(--color-card)',
             borderRadius: 'var(--radius-card)',
@@ -355,6 +355,61 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
         >
           <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
+          {/* 书签标记 — 右侧常驻 */}
+          {bookmarks.length > 0 && (
+            <div className="pointer-events-none absolute right-1.5 top-2 bottom-2 z-10 flex flex-col">
+              {bookmarks.map((bm) => {
+                const pct = getEngine()?.getProgressForLocation(bm.location) ?? 50
+                return (
+                  <div
+                    key={bm.id}
+                    className="pointer-events-auto relative flex items-center"
+                    style={{
+                      position: 'absolute',
+                      top: `${Math.min(95, Math.max(5, pct))}%`,
+                      right: 0,
+                    }}
+                  >
+                    <motion.button
+                      className="group/dot flex items-center gap-1.5"
+                      initial={false}
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      transition={springPress}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        getEngine()?.goToLocation(bm.location)
+                      }}
+                      aria-label={`跳转到书签：${bm.label}`}
+                    >
+                      <span
+                        className="block rounded-full opacity-30 transition-opacity duration-200 group-hover/dot:opacity-100"
+                        style={{
+                          width: 8,
+                          height: 8,
+                          background: bm.color,
+                          boxShadow: `0 0 6px ${bm.color}60`,
+                        }}
+                      />
+                      <span
+                        className="pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium group-hover/dot:inline-block"
+                        style={{
+                          background: toolbarBg,
+                          backdropFilter: toolbarBlur,
+                          WebkitBackdropFilter: toolbarBlur,
+                          boxShadow: 'var(--shadow-float)',
+                          color: 'var(--color-text)',
+                          border: '1px solid var(--color-separator)',
+                        }}
+                      >
+                        {bm.label}
+                      </span>
+                    </motion.button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </motion.div>
 
         {/* 左边缘高亮区域 */}

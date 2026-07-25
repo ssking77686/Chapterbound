@@ -70,12 +70,12 @@ export class EpubEngine implements IReaderEngine {
 
   getCurrentLocation(): string {
     const loc = this.rendition?.currentLocation()
-    return (loc as any)?.cfi ?? ''
+    return (loc as any)?.start?.cfi ?? ''
   }
 
   getProgress(): number {
     const loc = this.rendition?.currentLocation()
-    const cfi = (loc as any)?.cfi
+    const cfi = (loc as any)?.start?.cfi
     if (!cfi) return 0
     return this.computeProgress(cfi)
   }
@@ -132,6 +132,10 @@ export class EpubEngine implements IReaderEngine {
       this.rendition.themes.font(settings.fontFamily)
     }
     this.rendition.themes.override('line-height', String(settings.lineHeight))
+  }
+
+  getProgressForLocation(cfi: string): number {
+    return this.computeProgress(cfi)
   }
 
   setTheme(theme: 'light' | 'dark'): void {
