@@ -12,13 +12,13 @@ export const useProgressStore = create<ProgressState>((set) => ({
   current: null,
 
   loadProgress: async (bookId: string) => {
-    const storage = registry.getStorage() as any
+    const storage = registry.getStorage()
     const p = await storage.getProgress(bookId)
     set({ current: p })
   },
 
   saveProgress: async (bookId: string, location: string, progress: number) => {
-    const storage = registry.getStorage() as any
+    const storage = registry.getStorage()
     const record: ReadingProgress = {
       bookId,
       location,
