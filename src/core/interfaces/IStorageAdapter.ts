@@ -1,4 +1,4 @@
-import type { BookRecord, Bookmark } from '../types'
+import type { BookRecord, Bookmark, Highlight, ReadingProgress } from '../types'
 
 export interface IStorageAdapter {
   saveBook(book: BookRecord): Promise<void>
@@ -18,4 +18,11 @@ export interface IStorageAdapter {
   saveBookmark(bookmark: Bookmark): Promise<void>
   getBookmarks(bookId: string): Promise<Bookmark[]>
   deleteBookmark(id: string): Promise<void>
+
+  saveProgress(progress: ReadingProgress): Promise<void>
+  getProgress(bookId: string): Promise<ReadingProgress | null>
+
+  saveHighlight(highlight: Highlight): Promise<void>
+  getHighlights(bookId: string): Promise<Highlight[]>
+  deleteHighlight(id: string): Promise<void>
 }

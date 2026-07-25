@@ -14,13 +14,13 @@ export const useHighlightStore = create<HighlightState>((set, get) => ({
   highlights: [],
 
   loadHighlights: async (bookId: string) => {
-    const storage = registry.getStorage() as any
+    const storage = registry.getStorage()
     const list = await storage.getHighlights(bookId)
     set({ highlights: list })
   },
 
   addHighlight: async (bookId: string, location: string, text: string, color: string) => {
-    const storage = registry.getStorage() as any
+    const storage = registry.getStorage()
     const highlight: Highlight = {
       id: crypto.randomUUID(),
       bookId,
@@ -34,13 +34,13 @@ export const useHighlightStore = create<HighlightState>((set, get) => ({
   },
 
   removeHighlight: async (id: string) => {
-    const storage = registry.getStorage() as any
+    const storage = registry.getStorage()
     await storage.deleteHighlight(id)
     set({ highlights: get().highlights.filter((h) => h.id !== id) })
   },
 
   updateNote: async (id: string, note: string) => {
-    const storage = registry.getStorage() as any
+    const storage = registry.getStorage()
     const updated = get().highlights.map((h) => (h.id === id ? { ...h, note } : h))
     const target = updated.find((h) => h.id === id)
     if (target) await storage.saveHighlight(target)
