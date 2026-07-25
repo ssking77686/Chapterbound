@@ -18,6 +18,16 @@ dist-ssr
 .idea
 .DS_Store
 .playwright-mcp
+
+# Screenshots
+*.png
+*.jpg
+*.jpeg
+
+# Claude Code
+.claude/
+CLAUDE.md
+
 *.suo
 *.ntvs*
 *.njsproj
