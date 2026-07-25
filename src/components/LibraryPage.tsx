@@ -199,24 +199,45 @@ export function LibraryPage({ onOpenBook }: Props) {
                             />
                           </div>
                         )}
-                        <motion.button
-                          className="absolute right-1.5 bottom-1.5 hidden rounded-full p-2 group-hover:block"
-                          style={{
-                            background: 'var(--color-card)',
-                            boxShadow: 'var(--shadow-float)',
-                          }}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          transition={springPress}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setEditingCoverId(book.id)
-                            coverInputRef.current?.click()
-                          }}
-                          aria-label="编辑封面"
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
-                        </motion.button>
+                        <div className="absolute right-1.5 bottom-1.5 hidden gap-1 group-hover:flex">
+                          <motion.button
+                            className="rounded-full p-2"
+                            style={{
+                              background: 'var(--color-card)',
+                              boxShadow: 'var(--shadow-float)',
+                            }}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            transition={springPress}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingCoverId(book.id)
+                              coverInputRef.current?.click()
+                            }}
+                            aria-label="编辑封面"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+                          </motion.button>
+                          {book.coverData && (
+                            <motion.button
+                              className="rounded-full p-2"
+                              style={{
+                                background: 'var(--color-card)',
+                                boxShadow: 'var(--shadow-float)',
+                              }}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              transition={springPress}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                resetCover(book.id)
+                              }}
+                              aria-label="重置封面"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+                            </motion.button>
+                          )}
+                        </div>
                       </div>
                       <div className="mt-3">
                         <p
