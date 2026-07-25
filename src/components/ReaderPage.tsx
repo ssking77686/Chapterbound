@@ -90,7 +90,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
     const engine = getEngine()
     if (!engine) return
     const loc = engine.getCurrentLocation()
-    await addBookmark(bookId, loc, `书签 ${bookmarks.length + 1}`)
+    await addBookmark(bookId, loc, `书签 ${bookmarks.length + 1}`, '#C8694A')
   }
 
   const handleShowToc = async () => {

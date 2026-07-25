@@ -1,4 +1,4 @@
-import type { BookRecord } from '../types'
+import type { BookRecord, Bookmark } from '../types'
 
 export interface IStorageAdapter {
   saveBook(book: BookRecord): Promise<void>
@@ -14,4 +14,8 @@ export interface IStorageAdapter {
   getFileData(bookId: string): Promise<ArrayBuffer | null>
 
   getUsageInfo(): Promise<{ used: number; quota: number }>
+
+  saveBookmark(bookmark: Bookmark): Promise<void>
+  getBookmarks(bookId: string): Promise<Bookmark[]>
+  deleteBookmark(id: string): Promise<void>
 }

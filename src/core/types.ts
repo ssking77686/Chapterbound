@@ -42,6 +42,7 @@ export interface Bookmark {
   bookId: string
   location: string
   label: string
+  color: string
   createdAt: number
 }
 
