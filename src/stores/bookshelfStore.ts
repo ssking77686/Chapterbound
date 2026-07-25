@@ -2,6 +2,15 @@ import { create } from 'zustand'
 import { registry } from '../core/registry'
 import { BookFormat, type BookRecord } from '../core/types'
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to convert blob to base64'))
+    reader.readAsDataURL(blob)
+  })
+}
+
 interface BookshelfState {
   books: BookRecord[]
   loading: boolean
@@ -11,6 +20,8 @@ interface BookshelfState {
   importBook: (file: File) => Promise<void>
   removeBook: (id: string) => Promise<void>
   setCurrentBook: (id: string | null) => void
+  updateCover: (bookId: string, file: File) => Promise<void>
+  resetCover: (bookId: string) => Promise<void>
 }
 
 export const useBookshelfStore = create<BookshelfState>((set, get) => ({
@@ -43,7 +54,7 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
     // 提取元数据（EPUB 才有 parser，其他格式用基础信息）
     let title = file.name.replace(/\.[^.]+$/, '')
     let author = 'Unknown'
-    let coverUrl: string | undefined
+    let coverData: string | undefined
 
     const parser = registry.getParser(format)
     if (parser) {
@@ -52,7 +63,7 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
         title = meta.title
         author = meta.author
         if (meta.cover) {
-          coverUrl = URL.createObjectURL(meta.cover)
+          coverData = await blobToBase64(meta.cover)
         }
       } catch {
         // 降级使用文件名
@@ -66,7 +77,7 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
       id,
       title,
       author,
-      coverUrl,
+      coverData,
       format,
       fileSize: file.size,
       fileName: file.name,
@@ -84,6 +95,29 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
     set((s) => ({
       books: s.books.filter((b) => b.id !== id),
       currentBookId: s.currentBookId === id ? null : s.currentBookId,
+    }))
+  },
+
+  updateCover: async (bookId: string, file: File) => {
+    const storage = registry.getStorage()
+    const dataUrl = await blobToBase64(file)
+    const book = await storage.getBook(bookId)
+    if (!book) return
+    book.coverData = dataUrl
+    await storage.saveBook(book)
+    set((s) => ({
+      books: s.books.map((b) => (b.id === bookId ? { ...b, coverData: dataUrl } : b)),
+    }))
+  },
+
+  resetCover: async (bookId: string) => {
+    const storage = registry.getStorage()
+    const book = await storage.getBook(bookId)
+    if (!book) return
+    delete book.coverData
+    await storage.saveBook(book)
+    set((s) => ({
+      books: s.books.map((b) => (b.id === bookId ? { ...b, coverData: undefined } : b)),
     }))
   },
 

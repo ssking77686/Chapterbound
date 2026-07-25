@@ -18,6 +18,7 @@ export interface BookRecord {
   title: string
   author: string
   coverUrl?: string
+  coverData?: string
   format: BookFormat
   fileSize: number
   fileName: string

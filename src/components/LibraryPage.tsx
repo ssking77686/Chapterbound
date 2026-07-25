@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useBookshelfStore } from '../stores/bookshelfStore'
-import { BookOpen, Trash2, Plus, Sun, Moon } from 'lucide-react'
+import { BookOpen, Trash2, Plus, Sun, Moon, ImageIcon, Undo2 } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 
 interface Props {
@@ -13,11 +13,13 @@ const springPress = { type: 'spring' as const, bounce: 0, duration: 0.2 }
 const springPop = { type: 'spring' as const, bounce: 0.15, duration: 0.3 }
 
 export function LibraryPage({ onOpenBook }: Props) {
-  const { books, loading, loadBooks, importBook, removeBook } = useBookshelfStore()
+  const { books, loading, loadBooks, importBook, removeBook, updateCover, resetCover } = useBookshelfStore()
   const { toggle: toggleTheme, isDark } = useTheme()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
   const [scrolled, setScrolled] = useState(false)
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
+  const [editingCoverId, setEditingCoverId] = useState<string | null>(null)
 
   useEffect(() => {
     loadBooks()
@@ -46,6 +48,14 @@ export function LibraryPage({ onOpenBook }: Props) {
         return next
       })
     }, 250)
+  }
+
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !editingCoverId) return
+    await updateCover(editingCoverId, file)
+    setEditingCoverId(null)
+    if (coverInputRef.current) coverInputRef.current.value = ''
   }
 
   const toolbarBg = 'var(--color-toolbar)'
@@ -99,6 +109,13 @@ export function LibraryPage({ onOpenBook }: Props) {
               className="hidden"
             />
           </motion.label>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleCoverChange}
+            className="hidden"
+          />
           </div>
         </div>
       </motion.header>
@@ -146,7 +163,7 @@ export function LibraryPage({ onOpenBook }: Props) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                     transition={springDefault}
-                    className="relative cursor-pointer"
+                    className="group relative cursor-pointer"
                     style={{ borderRadius: 'var(--radius-card)' }}
                     onClick={() => onOpenBook(book.id)}
                   >
@@ -165,12 +182,12 @@ export function LibraryPage({ onOpenBook }: Props) {
                       whileTap={{ scale: 0.97, transition: springPress }}
                     >
                       <div
-                        className="aspect-[3/4] w-full overflow-hidden rounded-xl"
+                        className="relative aspect-[3/4] w-full overflow-hidden rounded-xl"
                         style={{ background: 'var(--color-page-bg)' }}
                       >
-                        {book.coverUrl ? (
+                        {book.coverData || book.coverUrl ? (
                           <img
-                            src={book.coverUrl}
+                            src={book.coverData || book.coverUrl}
                             alt={book.title}
                             className="h-full w-full object-cover"
                           />
@@ -182,6 +199,45 @@ export function LibraryPage({ onOpenBook }: Props) {
                             />
                           </div>
                         )}
+                        <div className="absolute right-1.5 bottom-1.5 hidden gap-1 group-hover:flex">
+                          <motion.button
+                            className="rounded-full p-2"
+                            style={{
+                              background: 'var(--color-card)',
+                              boxShadow: 'var(--shadow-float)',
+                            }}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            transition={springPress}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingCoverId(book.id)
+                              coverInputRef.current?.click()
+                            }}
+                            aria-label="编辑封面"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+                          </motion.button>
+                          {book.coverData && (
+                            <motion.button
+                              className="rounded-full p-2"
+                              style={{
+                                background: 'var(--color-card)',
+                                boxShadow: 'var(--shadow-float)',
+                              }}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              transition={springPress}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                resetCover(book.id)
+                              }}
+                              aria-label="重置封面"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+                            </motion.button>
+                          )}
+                        </div>
                       </div>
                       <div className="mt-3">
                         <p
