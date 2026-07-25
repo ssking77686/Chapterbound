@@ -28,11 +28,17 @@ const bookmarkColors = [
   { name: '紫罗兰', value: '#B89AC4' },
 ]
 
+const sidebarTabs = [
+  { key: 'toc' as const, label: '目录' },
+  { key: 'bookmarks' as const, label: '书签' },
+  { key: 'settings' as const, label: '设置' },
+]
+
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { nextPage, prevPage, getEngine, pageInfo, applySettings } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
-  const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt } = useBookmarkStore()
+  const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
   const { settings, updateSettings } = useSettingsStore()
 
@@ -486,17 +492,17 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 className="flex border-b px-5 pt-5 pb-0"
                 style={{ borderColor: 'var(--color-separator)' }}
               >
-                {(['toc', 'settings'] as const).map((tab) => (
+                {sidebarTabs.map((tab) => (
                   <button
-                    key={tab}
+                    key={tab.key}
                     className="relative flex-1 pb-3 text-sm font-medium transition-colors"
                     style={{
-                      color: sidebarTab === tab ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                      color: sidebarTab === tab.key ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     }}
-                    onClick={() => setSidebarTab(tab)}
+                    onClick={() => setSidebarTab(tab.key)}
                   >
-                    {tab === 'toc' ? '目录' : '设置'}
-                    {sidebarTab === tab && (
+                    {tab.label}
+                    {sidebarTab === tab.key && (
                       <motion.div
                         layoutId="sidebar-tab-indicator"
                         className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
@@ -530,6 +536,89 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       {item.label}
                     </motion.button>
                   ))}
+                </div>
+              )}
+
+              {/* 书签面板 */}
+              {sidebarTab === 'bookmarks' && (
+                <div className="flex flex-col gap-2.5 p-5">
+                  <AnimatePresence>
+                    {bookmarks.length === 0 ? (
+                      <motion.div
+                        className="mt-8 flex flex-col items-center gap-3 text-center"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <Bookmark
+                          className="h-8 w-8"
+                          style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}
+                        />
+                        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          还没有书签哦，读到精彩处打个标记吧
+                        </p>
+                      </motion.div>
+                    ) : (
+                      bookmarks.map((bm) => (
+                        <motion.div
+                          key={bm.id}
+                          className="flex items-center overflow-hidden rounded-xl"
+                          style={{
+                            background: 'var(--color-card)',
+                            boxShadow: 'var(--shadow-card)',
+                          }}
+                          initial={{ opacity: 0, x: 24 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
+                          transition={springDefault}
+                          layout
+                        >
+                          <div
+                            className="h-12 w-1.5 flex-shrink-0 rounded-full"
+                            style={{ background: bm.color, marginLeft: 0 }}
+                          />
+                          <button
+                            className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                            onClick={() => {
+                              getEngine()?.goToLocation(bm.location)
+                              setSidebarTab(null)
+                            }}
+                          >
+                            <p
+                              className="truncate text-sm font-medium"
+                              style={{ color: 'var(--color-text)' }}
+                            >
+                              {bm.label}
+                            </p>
+                            <p
+                              className="text-xs"
+                              style={{
+                                color: 'var(--color-text-secondary)',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              {new Date(bm.createdAt).toLocaleString('zh-CN', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </button>
+                          <motion.button
+                            className="flex-shrink-0 rounded-full p-2.5"
+                            whileHover={{ scale: 1.15 }}
+                            whileTap={{ scale: 0.9 }}
+                            transition={springPress}
+                            style={{ color: 'var(--color-text-secondary)' }}
+                            onClick={() => removeBookmark(bm.id)}
+                            aria-label="删除书签"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </motion.button>
+                        </motion.div>
+                      ))
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
 
