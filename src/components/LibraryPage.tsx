@@ -168,9 +168,9 @@ export function LibraryPage({ onOpenBook }: Props) {
                         className="aspect-[3/4] w-full overflow-hidden rounded-xl"
                         style={{ background: 'var(--color-page-bg)' }}
                       >
-                        {book.coverUrl ? (
+                        {book.coverData || book.coverUrl ? (
                           <img
-                            src={book.coverUrl}
+                            src={book.coverData || book.coverUrl}
                             alt={book.title}
                             className="h-full w-full object-cover"
                           />
