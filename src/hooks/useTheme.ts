@@ -4,8 +4,18 @@ type Theme = 'light' | 'dark'
 
 const STORAGE_KEY = 'ereader-theme'
 
+function isValidTheme(v: unknown): v is Theme {
+  return v === 'light' || v === 'dark'
+}
+
 function getSystemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function loadTheme(): Theme {
+  const stored = localStorage.getItem(STORAGE_KEY)
+  if (isValidTheme(stored)) return stored
+  return getSystemTheme()
 }
 
 function applyTheme(theme: Theme) {
@@ -13,10 +23,7 @@ function applyTheme(theme: Theme) {
 }
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
-    return stored ?? getSystemTheme()
-  })
+  const [theme, setTheme] = useState<Theme>(loadTheme)
 
   useEffect(() => {
     applyTheme(theme)

@@ -441,7 +441,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
             top: 8,
             bottom: 8,
             ...navButtonClass,
-            opacity: undefined as unknown as string,
           }}
           whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
           whileTap={{ scale: 0.96 }}
@@ -479,7 +478,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
             top: 8,
             bottom: 8,
             ...navButtonClass,
-            opacity: undefined as unknown as string,
           }}
           whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
           whileTap={{ scale: 0.96 }}
