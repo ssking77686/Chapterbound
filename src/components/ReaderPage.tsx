@@ -50,6 +50,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnDirection = useRef(0)
+  const pageInfoRef = useRef(pageInfo)
+  pageInfoRef.current = pageInfo
   const [cardScope, cardAnimate] = useAnimate()
   const [bookmarkScope, bookmarkAnimate] = useAnimate()
   const { toggle: toggleTheme, isDark } = useTheme()
@@ -125,7 +127,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
     const loc = currentLocation()
     if (!loc) return
     setPickerOpen(false)
-    await addBookmark(bookId, loc, `书签 ${bookmarks.length + 1}`, color)
+    const { current, total } = pageInfoRef.current
+    const progress = total > 0 ? Math.round((current / total) * 100) : 50
+    await addBookmark(bookId, loc, `书签 ${bookmarks.length + 1}`, color, progress)
     bookmarkAnimate(bookmarkScope.current,
       { scale: [1, 1.35, 1] },
       { type: 'spring', bounce: 0.4, duration: 0.4 },
@@ -359,7 +363,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           {bookmarks.length > 0 && (
             <div className="pointer-events-none absolute right-1.5 top-2 bottom-2 z-10 flex flex-col">
               {bookmarks.map((bm) => {
-                const pct = getEngine()?.getProgressForLocation(bm.location) ?? 50
+                const pct = bm.progress ?? 50
                 return (
                   <div
                     key={bm.id}

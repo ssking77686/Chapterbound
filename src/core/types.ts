@@ -43,6 +43,7 @@ export interface Bookmark {
   location: string
   label: string
   color: string
+  progress: number
   createdAt: number
 }
 

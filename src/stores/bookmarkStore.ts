@@ -5,7 +5,7 @@ import type { Bookmark } from '../core/types'
 interface BookmarkState {
   bookmarks: Bookmark[]
   loadBookmarks: (bookId: string) => Promise<void>
-  addBookmark: (bookId: string, location: string, label: string, color: string) => Promise<void>
+  addBookmark: (bookId: string, location: string, label: string, color: string, progress: number) => Promise<void>
   removeBookmark: (id: string) => Promise<void>
   hasBookmarkAt: (location: string) => boolean
   getBookmarkAt: (location: string) => Bookmark | undefined
@@ -20,7 +20,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     set({ bookmarks: list })
   },
 
-  addBookmark: async (bookId: string, location: string, label: string, color: string) => {
+  addBookmark: async (bookId: string, location: string, label: string, color: string, progress: number) => {
     const storage = registry.getStorage()
     const bookmark: Bookmark = {
       id: crypto.randomUUID(),
@@ -28,6 +28,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       location,
       label,
       color,
+      progress,
       createdAt: Date.now(),
     }
     await storage.saveBookmark(bookmark)
