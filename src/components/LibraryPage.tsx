@@ -20,6 +20,7 @@ export function LibraryPage({ onOpenBook }: Props) {
   const [scrolled, setScrolled] = useState(false)
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
   const [editingCoverId, setEditingCoverId] = useState<string | null>(null)
+  const pendingRemovals = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     loadBooks()
@@ -31,6 +32,15 @@ export function LibraryPage({ onOpenBook }: Props) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // 组件卸载时，立即执行所有等待动画的删除操作，防止竞态
+  useEffect(() => {
+    return () => {
+      for (const id of pendingRemovals.current) {
+        removeBook(id)
+      }
+    }
+  }, [removeBook])
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -40,6 +50,7 @@ export function LibraryPage({ onOpenBook }: Props) {
 
   const handleRemove = (id: string) => {
     setRemovingIds((prev) => new Set(prev).add(id))
+    pendingRemovals.current.add(id)
     setTimeout(() => {
       removeBook(id)
       setRemovingIds((prev) => {
@@ -47,6 +58,7 @@ export function LibraryPage({ onOpenBook }: Props) {
         next.delete(id)
         return next
       })
+      pendingRemovals.current.delete(id)
     }, 250)
   }
 
