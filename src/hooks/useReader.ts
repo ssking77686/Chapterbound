@@ -3,6 +3,7 @@ import { EpubEngine } from '../engines/EpubEngine'
 import { registry } from '../core/registry'
 import { useProgressStore } from '../stores/progressStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useCompendiumStore } from '../stores/compendiumStore'
 
 export interface PageInfo {
   current: number
@@ -11,6 +12,8 @@ export interface PageInfo {
 
 export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivElement | null>) {
   const engineRef = useRef<EpubEngine | null>(null)
+  const chapterMapRef = useRef<Map<number, number>>(new Map())
+  const lastChapterRef = useRef(0)
   const saveProgress = useProgressStore((s) => s.saveProgress)
   const loadProgress = useProgressStore((s) => s.loadProgress)
   const [pageInfo, setPageInfo] = useState<PageInfo>({ current: 0, total: 0 })
@@ -30,9 +33,14 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
         return
       }
 
-      engine.on('ready', () => {
+      engine.on('ready', async () => {
         const settings = useSettingsStore.getState().settings
         engine.applySettings(settings)
+
+        chapterMapRef.current = await engine.getChapterMap()
+
+        useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})
+
         loadProgress(bookId).then(() => {
           const p = useProgressStore.getState().current
           if (p?.location) {
@@ -41,10 +49,18 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
         })
       })
 
-      engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown) => {
+      engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
         saveProgress(bookId, loc as string, prog as number)
         if (typeof page === 'number' && typeof total === 'number') {
           setPageInfo({ current: page, total })
+        }
+
+        if (typeof spineIndex === 'number') {
+          const chapter = chapterMapRef.current.get(spineIndex)
+          if (chapter && chapter !== lastChapterRef.current) {
+            lastChapterRef.current = chapter
+            useCompendiumStore.getState().checkUnlock(chapter)
+          }
         }
       })
 
