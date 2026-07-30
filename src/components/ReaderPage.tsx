@@ -5,7 +5,7 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore } from '../stores/compendiumStore'
@@ -44,13 +44,14 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const { loadHighlights } = useHighlightStore()
   const { settings, updateSettings } = useSettingsStore()
   const compendiumEntries = useCompendiumStore((s) => s.entries)
+  const compendiumLastViewedAt = useCompendiumStore((s) => s.lastViewedAt)
+  const compendiumMarkViewed = useCompendiumStore((s) => s.markViewed)
   const compendiumLoad = useCompendiumStore((s) => s.loadCompendium)
   const compendiumImport = useCompendiumStore((s) => s.importFromJSON)
   const getEntriesByCategory = useCompendiumStore((s) => s.getEntriesByCategory)
   const getEntryById = useCompendiumStore((s) => s.getEntryById)
-  const [compendiumCategory, setCompendiumCategory] = useState<'character' | 'location'>('character')
+  const [compendiumCategory, setCompendiumCategory] = useState<'character' | 'location' | 'monster'>('character')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
-  const [lastViewedChapter, setLastViewedChapter] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importMsg, setImportMsg] = useState('')
 
@@ -359,9 +360,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
           <List className="h-5 w-5" />
         </motion.button>
         <motion.button
-          onClick={() => {
-            compendiumLoad(bookId).catch(() => {})
-            setLastViewedChapter(useCompendiumStore.getState().currentChapter)
+          onClick={async () => {
+            await compendiumLoad(bookId)
+            compendiumMarkViewed()
             setSidebarTab('compendium')
           }}
           className="relative rounded-full p-2.5"
@@ -374,7 +375,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
           <ScrollText className="h-5 w-5" />
           {(() => {
             const hasNew = compendiumEntries.some((e) =>
-              e.entries.some((r) => r.unlocked && r.chapter > lastViewedChapter),
+              e.updatedAt > compendiumLastViewedAt && (
+                e.entries.some((r) => r.unlocked) ||
+                e.quotations.some((q) => q.unlocked !== false)
+              ),
             )
             return hasNew ? (
               <span
@@ -756,6 +760,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     {([
                       { key: 'character' as const, label: '人物', icon: User },
                       { key: 'location' as const, label: '地点', icon: MapPin },
+                      { key: 'monster' as const, label: '怪物', icon: Skull },
                     ]).map((cat) => (
                       <motion.button
                         key={cat.key}
@@ -780,48 +785,65 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     {(() => {
                       const filtered = getEntriesByCategory(compendiumCategory)
                       if (filtered.length === 0) {
+                        const totalImported = compendiumEntries.filter((e) => e.category === compendiumCategory).length
+                        if (totalImported === 0) {
+                          return (
+                            <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
+                              <ScrollText
+                                className="h-7 w-7"
+                                style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}
+                              />
+                              <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                                暂无图鉴数据
+                              </p>
+                              <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
+                                导入 AI 生成的 JSON 文件来填充人物、地点和怪物图鉴
+                              </p>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".json"
+                                className="hidden"
+                              />
+                              <motion.button
+                                className="mt-1 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+                                style={{
+                                  background: 'var(--color-accent)',
+                                  color: '#fff',
+                                }}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                transition={springPress}
+                                onClick={handleImportJSON}
+                              >
+                                <Upload className="h-3.5 w-3.5" />
+                                导入 JSON
+                              </motion.button>
+                              {importMsg && (
+                                <motion.p
+                                  className="text-xs"
+                                  initial={{ opacity: 0, y: 4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  style={{ color: importMsg.includes('失败') ? 'var(--color-danger)' : 'var(--color-accent)' }}
+                                >
+                                  {importMsg}
+                                </motion.p>
+                              )}
+                            </div>
+                          )
+                        }
                         return (
                           <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
                             <ScrollText
                               className="h-7 w-7"
-                              style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}
+                              style={{ color: 'var(--comp-accent)', opacity: 0.5 }}
                             />
                             <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                              暂无图鉴数据
+                              继续阅读以发现{compendiumCategory === 'character' ? '人物' : compendiumCategory === 'location' ? '地点' : '怪物'}
                             </p>
                             <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
-                              导入 AI 生成的 JSON 文件来填充人物和地点图鉴
+                              随着剧情推进，你遇到的角色、怪物和地点将逐一在此解锁
                             </p>
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept=".json"
-                              className="hidden"
-                            />
-                            <motion.button
-                              className="mt-1 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
-                              style={{
-                                background: 'var(--color-accent)',
-                                color: '#fff',
-                              }}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              transition={springPress}
-                              onClick={handleImportJSON}
-                            >
-                              <Upload className="h-3.5 w-3.5" />
-                              导入 JSON
-                            </motion.button>
-                            {importMsg && (
-                              <motion.p
-                                className="text-xs"
-                                initial={{ opacity: 0, y: 4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                style={{ color: importMsg.includes('失败') ? 'var(--color-danger)' : 'var(--color-accent)' }}
-                              >
-                                {importMsg}
-                              </motion.p>
-                            )}
                           </div>
                         )
                       }
@@ -850,7 +872,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
                               {entry.image ? (
                                 <img src={entry.image} alt={entry.name} className="h-full w-full object-cover" />
                               ) : (
-                                <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
+                                entry.category === 'character' ? <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
+                                entry.category === 'location' ? <MapPin className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
+                                <Skull className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
@@ -1099,6 +1123,24 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 {detailEntry.description}
               </p>
 
+              {/* 历史 */}
+              {detailEntry.history && (
+                <div className="mt-5">
+                  <h3
+                    className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--comp-text-secondary)' }}
+                  >
+                    历史
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: 'var(--comp-text)' }}
+                  >
+                    {detailEntry.history}
+                  </p>
+                </div>
+              )}
+
               {/* 关联条目 */}
               {detailEntry.relations.length > 0 && (
                 <div className="mt-6">
@@ -1106,7 +1148,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     className="mb-2 text-xs font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
-                    相关{detailEntry.category === 'character' ? '人物' : '地点'}
+                    相关{detailEntry.category === 'character' ? '人物' : detailEntry.category === 'location' ? '地点' : '怪物'}
                   </h3>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {detailEntry.relations.map((rel) => {
@@ -1136,6 +1178,49 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         </motion.button>
                       )
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* 文献引述 */}
+              {detailEntry.quotations.length > 0 && (
+                <div className="mt-6">
+                  <h3
+                    className="mb-3 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--comp-text-secondary)' }}
+                  >
+                    文献引述
+                  </h3>
+                  <div className="flex flex-col gap-4">
+                    {detailEntry.quotations.map((q, i) => (
+                      <div
+                        key={i}
+                        className="relative"
+                        style={{
+                          paddingLeft: 14,
+                          borderLeft: '2px solid var(--comp-separator)',
+                          filter: q.unlocked !== false ? 'none' : 'blur(2px)',
+                          userSelect: q.unlocked !== false ? 'text' : 'none',
+                        }}
+                      >
+                        <p
+                          className="text-sm leading-relaxed"
+                          style={{
+                            color: q.unlocked !== false ? 'var(--comp-text)' : 'var(--comp-blur-text)',
+                            fontStyle: 'italic',
+                            fontFamily: 'Georgia, "Noto Serif", serif',
+                          }}
+                        >
+                          {q.unlocked !== false ? q.text : '继续阅读以解锁此引述……'}
+                        </p>
+                        <p
+                          className="mt-1.5 text-right text-xs"
+                          style={{ color: 'var(--comp-text-secondary)' }}
+                        >
+                          {q.unlocked !== false ? q.attribution : '——？？？'}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

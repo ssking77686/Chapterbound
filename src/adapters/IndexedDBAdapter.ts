@@ -143,10 +143,14 @@ export class IndexedDBAdapter implements IStorageAdapter {
     const entries: CompendiumEntry[] = [
       ...data.characters,
       ...data.locations,
+      ...data.monsters,
     ].map((item) => ({
       ...item,
       bookId,
       aliases: item.aliases ?? [],
+      quotations: (item.quotations ?? []).map((q) => (
+        q.chapter !== undefined ? { ...q, unlocked: false } : { ...q, unlocked: true }
+      )),
       entries: item.entries.map((e) => ({ ...e, unlocked: false })),
       createdAt: now,
       updatedAt: now,

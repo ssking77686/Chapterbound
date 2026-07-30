@@ -5,25 +5,52 @@ import type { CompendiumEntry, CompendiumImportData } from '../core/types'
 interface CompendiumState {
   entries: CompendiumEntry[]
   currentChapter: number
+  lastViewedAt: number
 
   loadCompendium: (bookId: string) => Promise<void>
   importFromJSON: (bookId: string, json: CompendiumImportData) => Promise<void>
   checkUnlock: (chapter: number) => void
+  markViewed: () => void
   addEntry: (entry: CompendiumEntry) => Promise<void>
   updateEntry: (id: string, patch: Partial<CompendiumEntry>) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
-  getEntriesByCategory: (category: 'character' | 'location') => CompendiumEntry[]
+  getEntriesByCategory: (category: 'character' | 'location' | 'monster') => CompendiumEntry[]
   getEntryById: (id: string) => CompendiumEntry | undefined
+}
+
+function hasUnlockedContent(entry: CompendiumEntry): boolean {
+  return entry.entries.some((r) => r.unlocked) ||
+    entry.quotations.some((q) => q.unlocked !== false)
 }
 
 export const useCompendiumStore = create<CompendiumState>((set, get) => ({
   entries: [],
   currentChapter: 0,
+  lastViewedAt: 0,
 
   loadCompendium: async (bookId: string) => {
     const storage = registry.getStorage()
     const list = await storage.getEntriesByBook(bookId)
-    set({ entries: list })
+    const currentChapter = get().currentChapter
+    const updated = list.map((entry) => {
+      let changed = false
+      const newEntries = entry.entries.map((rev) => {
+        if (!rev.unlocked && rev.chapter <= currentChapter) {
+          changed = true
+          return { ...rev, unlocked: true }
+        }
+        return rev
+      })
+      const newQuotations = entry.quotations.map((q) => {
+        if (!q.unlocked && q.chapter !== undefined && q.chapter <= currentChapter) {
+          changed = true
+          return { ...q, unlocked: true }
+        }
+        return q
+      })
+      return changed ? { ...entry, entries: newEntries, quotations: newQuotations } : entry
+    })
+    set({ entries: updated })
   },
 
   importFromJSON: async (bookId: string, json: CompendiumImportData) => {
@@ -44,10 +71,21 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
           }
           return rev
         })
-        return changed ? { ...entry, entries: newEntries, updatedAt: Date.now() } : entry
+        const newQuotations = entry.quotations.map((q) => {
+          if (!q.unlocked && q.chapter !== undefined && q.chapter <= chapter) {
+            changed = true
+            return { ...q, unlocked: true }
+          }
+          return q
+        })
+        return changed ? { ...entry, entries: newEntries, quotations: newQuotations, updatedAt: Date.now() } : entry
       })
       return { entries: updated, currentChapter: chapter }
     })
+  },
+
+  markViewed: () => {
+    set({ lastViewedAt: Date.now() })
   },
 
   addEntry: async (entry: CompendiumEntry) => {
@@ -72,9 +110,9 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     set({ entries: get().entries.filter((e) => e.id !== id) })
   },
 
-  getEntriesByCategory: (category: 'character' | 'location') => {
+  getEntriesByCategory: (category: 'character' | 'location' | 'monster') => {
     return get()
-      .entries.filter((e) => e.category === category)
+      .entries.filter((e) => e.category === category && hasUnlockedContent(e))
       .sort((a, b) => {
         const aUnlocked = a.entries.filter((r) => r.unlocked).length
         const bUnlocked = b.entries.filter((r) => r.unlocked).length

@@ -35,6 +35,7 @@ export class EpubEngine implements IReaderEngine {
       const progress = this.computeProgress(cfi)
       const page = location.start.displayed.page
       const total = location.start.displayed.total
+      console.log('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
       this.emit('locationChange', cfi, progress, page, total, location.start.index)
     })
 
@@ -73,15 +74,23 @@ export class EpubEngine implements IReaderEngine {
   }
 
   getCurrentLocation(): string {
-    const loc = this.rendition?.currentLocation()
-    return (loc as any)?.start?.cfi ?? ''
+    try {
+      const loc = this.rendition?.currentLocation()
+      return (loc as any)?.start?.cfi ?? ''
+    } catch {
+      return ''
+    }
   }
 
   getProgress(): number {
-    const loc = this.rendition?.currentLocation()
-    const cfi = (loc as any)?.start?.cfi
-    if (!cfi) return 0
-    return this.computeProgress(cfi)
+    try {
+      const loc = this.rendition?.currentLocation()
+      const cfi = (loc as any)?.start?.cfi
+      if (!cfi) return 0
+      return this.computeProgress(cfi)
+    } catch {
+      return 0
+    }
   }
 
   async getTOC(): Promise<TOCItem[]> {

@@ -90,19 +90,29 @@ export interface ParsedBook {
   content: unknown
 }
 
-// 图鉴条目（人物/地点）
+// 图鉴条目（人物/地点/怪物）
 export interface CompendiumEntry {
   id: string
   bookId: string
   name: string
   aliases: string[]
   image?: string
-  category: 'character' | 'location'
+  category: 'character' | 'location' | 'monster'
   description: string
+  history?: string
   entries: CompendiumRevelation[]
   relations: CompendiumRelation[]
+  quotations: CompendiumQuotation[]
   createdAt: number
   updatedAt: number
+}
+
+// 图鉴文献引述
+export interface CompendiumQuotation {
+  text: string
+  attribution: string
+  chapter?: number       // 可选，随章节解锁
+  unlocked?: boolean     // 运行时状态（导入时自动写入）
 }
 
 // 图鉴按章节解锁的发现
@@ -123,6 +133,7 @@ export interface CompendiumImportData {
   bookId: string
   characters: CompendiumImportEntry[]
   locations: CompendiumImportEntry[]
+  monsters: CompendiumImportEntry[]
 }
 
 // 图鉴导入 JSON 中的单条条目
@@ -131,10 +142,12 @@ export interface CompendiumImportEntry {
   name: string
   aliases?: string[]
   image?: string
-  category: 'character' | 'location'
+  category: 'character' | 'location' | 'monster'
   description: string
+  history?: string
   entries: { chapter: number; text: string }[]
   relations: { targetId: string; label: string }[]
+  quotations?: { text: string; attribution: string; chapter?: number }[]
 }
 
 // 引擎统一的事件回调类型

@@ -20,35 +20,16 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
 
   useEffect(() => {
     let cancelled = false
+    let pendingSpine = -1
     const init = async () => {
       const storage = registry.getStorage()
       const data = await storage.getFileData(bookId)
       if (!data || !containerRef.current || cancelled) return
 
       const engine = new EpubEngine()
-      await engine.load(data, containerRef.current)
+      engineRef.current = engine
 
-      if (cancelled) {
-        engine.destroy()
-        return
-      }
-
-      engine.on('ready', async () => {
-        const settings = useSettingsStore.getState().settings
-        engine.applySettings(settings)
-
-        chapterMapRef.current = await engine.getChapterMap()
-
-        useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})
-
-        loadProgress(bookId).then(() => {
-          const p = useProgressStore.getState().current
-          if (p?.location) {
-            engine.goToLocation(p.location)
-          }
-        })
-      })
-
+      // 监听器必须在 load() 之前注册——load() 内部会触发 relocated 和 ready 事件
       engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
         saveProgress(bookId, loc as string, prog as number)
         if (typeof page === 'number' && typeof total === 'number') {
@@ -56,15 +37,45 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
         }
 
         if (typeof spineIndex === 'number') {
+          pendingSpine = spineIndex
           const chapter = chapterMapRef.current.get(spineIndex)
-          if (chapter && chapter !== lastChapterRef.current) {
+          if (chapter !== undefined && chapter !== lastChapterRef.current) {
             lastChapterRef.current = chapter
             useCompendiumStore.getState().checkUnlock(chapter)
           }
         }
       })
 
-      engineRef.current = engine
+      await engine.load(data, containerRef.current)
+
+      if (cancelled) {
+        engine.destroy()
+        return
+      }
+
+      // load() 完成后初始化 chapterMap 和 compendium
+      const settings = useSettingsStore.getState().settings
+      engine.applySettings(settings)
+
+      chapterMapRef.current = await engine.getChapterMap()
+      useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})
+
+      // 补检初始章节（load 期间的 relocated 可能在 chapterMap 为空时已触发）
+      const savedIndex = pendingSpine
+      if (savedIndex >= 0) {
+        const chapter = chapterMapRef.current.get(savedIndex)
+        if (chapter !== undefined && chapter !== lastChapterRef.current) {
+          lastChapterRef.current = chapter
+          useCompendiumStore.getState().checkUnlock(chapter)
+        }
+      }
+
+      loadProgress(bookId).then(() => {
+        const p = useProgressStore.getState().current
+        if (p?.location) {
+          engine.goToLocation(p.location)
+        }
+      })
     }
 
     init()
