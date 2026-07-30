@@ -2,156 +2,123 @@
   <a href="#中文">中文</a> | <a href="#english">English</a>
 </p>
 
----
+\---
 
 <h1 align="center">电子阅读器</h1>
-<p align="center">一个基于 Web 的现代化电子书阅读应用，支持多种格式，采用可插拔架构。</p>
+<p align="center">一个跑在浏览器里的电子书阅读器。</p>
 
----
+\---
 
 ## 中文
 
-### 简介
+### 这是什么
 
-电子阅读器是一款 Web-first 的电子书阅读 PWA，支持 EPUB、PDF、TXT 等主流格式。采用**插件化架构**设计，所有功能模块独立注册，新增格式或功能只需实现对应接口即可，无需修改已有代码。
+一个用 Web 技术做的电子书阅读器。目前支持 EPUB，后面可能会加 PDF 和 TXT。
 
-### 功能
+代码上用了插件化的思路——引擎、存储、功能模块都走接口，换存储或者加新格式不用动已有代码。UI 上参考了 Apple Books 的暖色系，亮暗主题都支持，手机到带鱼屏都能看。
 
-- **书架管理** — 导入、浏览、删除电子书，自动提取封面和元数据
-- **阅读进度** — 自动保存阅读位置，下次打开自动恢复
-- **阅读设置** — 字号、字体、行间距实时调节，偏好持久化
-- **明暗主题** — 手动切换或跟随系统，暖色调暗夜模式
-- **自适应宽屏** — 支持 34 寸带鱼屏双页展开，响应式列数
-- **书签** — 添加和管理书签，快速跳转
-- **高亮与笔记** — 选中文字添加高亮标注，支持 CFI 精确定位
-- **目录导航** — 解析书籍目录，一键跳转章节
+### 能干什么
 
-### 支持的格式
+* 导入 EPUB，自动取封面和作者信息。封面不满意可以自己换
+* 阅读进度自动记，下次打开接着看
+* 字号、字体、行间距随便调，偏好会记住
+* 日间/夜间模式，手动切或者跟系统走都行。暗色是暖棕底，不刺眼
+* 宽屏会自动双页展开，书架也会多放几列
+* 书签是彩色标签（五色可选），侧栏里能看能删能跳
+* 选中文字可以划高亮
+* 点目录直接跳章节
 
-| 格式 | 状态 |
-|------|------|
-| EPUB | 已完成 |
-| PDF | 计划中 |
-| TXT | 计划中 |
-| AZW3 | 计划中 |
+**v1.1.0 新增了图鉴系统**，灵感来自《巫师 3》里的角色词条。主要特点：
+
+* 人物、地点、怪物三大类，各自一个 tab
+* 数据靠 AI 生成的 JSON 文件批量导入（编写规范见 `compendium-guide.md`）
+* 读到对应章节，条目才会在列表里出现 —— 不会提前剧透
+* 每个人的"发现日志"按章节分层，新章节自动解锁，没读到的内容会模糊
+* 地点条目有历史沿革，条目之间可以建关系网（恋人、导师、宿敌、栖息地……），点关联卡片直接跳过去看
+* 支持嵌入世界观内的文献引述（像《北方诸国名人录》·丹德里恩这种），有章节标注的会跟着进度解锁
+* 有新东西解锁时图鉴按钮上亮个金色小光点，点进去看过就熄了
+* 图鉴内部是独立的深羊皮纸配色，跟全局日夜间模式互不干扰
+* 章节检测全自动，基于 epub.js 的 spine index，不需要手动标
+
+### 怎么跑
+
+```bash
+npm install
+npm run dev      # 开发
+npm run build    # 构建
+npm run lint     # 检查
+```
 
 ### 技术栈
 
-| 类别 | 技术 |
-|------|------|
-| 框架 | React 19 + TypeScript |
-| 构建 | Vite 8 |
-| 状态管理 | Zustand |
-| 数据库 | Dexie.js (IndexedDB) |
-| 样式 | Tailwind CSS v4 |
-| EPUB 渲染 | epub.js |
-| 动效 | motion |
-| PDF 渲染 | pdf.js |
-| 图标 | Lucide React |
+React 19 + TypeScript，Vite 8 构建，Zustand 管状态，Dexie.js 套 IndexedDB，Tailwind CSS v4 写样式，epub.js 渲染，motion 做动效，Lucide 图标。
 
-### 快速开始
-
-```bash
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-
-# 生产构建
-npm run build
-```
-
-### 项目结构
+### 目录结构
 
 ```
 src/
-├── core/          # 接口定义 + ServiceRegistry（不可变核心）
-├── adapters/      # 存储适配器（可替换）
-├── engines/       # 阅读器引擎（可插拔）
-├── parsers/       # 格式解析器（可插拔）
-├── features/      # 功能插件（可插拔）
-├── plugins/       # 插件注册入口
-├── stores/        # Zustand 状态管理
-├── hooks/         # React Hooks
-└── components/    # UI 组件
+├── core/           # 接口和类型，ServiceRegistry
+├── adapters/       # 存储适配器（目前只有 IndexedDB）
+├── engines/        # 阅读引擎（目前只有 EPUB）
+├── parsers/        # 格式解析
+├── features/       # 功能插件
+├── stores/         # Zustand store
+├── hooks/          # React hooks
+├── components/     # UI 组件
+└── plugins/        # 启动注册
 ```
 
 ### 许可
 
 [MIT](LICENSE) © ahine Yang
 
----
+\---
 
 ## English
 
-### Overview
+### What is this
 
-E-Reader is a web-first eBook reading application supporting EPUB, PDF, TXT, and more. Built with a **plugin-based architecture**, all features and format engines are independently registered — adding a new format or feature means implementing an interface, with zero changes to existing code.
+An ebook reader that runs in the browser. EPUB is supported, PDF and TXT maybe on the way .
+
+The code is plugin-based — engines, storage, and features all sit behind interfaces, so swapping storage or adding a format doesn't touch existing code. The UI follows Apple Books' warm palette, works in light and dark mode, and scales from phones to ultrawide monitors.
 
 ### Features
 
-- **Library Management** — Import, browse, and delete books with automatic cover and metadata extraction
-- **Reading Progress** — Auto-saves reading position, restores on next open
-- **Reading Settings** — Real-time font size, family, and line spacing adjustment with persistence
-- **Light/Dark Theme** — Manual toggle or follow system preference with warm dark palette
-- **Ultrawide Support** — Dual-page spread on 34" monitors, responsive grid columns
-- **Bookmarks** — Add and manage bookmarks with quick navigation
-- **Highlights & Notes** — Select text to highlight with precise CFI positioning
-- **Table of Contents** — Parse book TOC for one-click chapter navigation
+* Import EPUBs with automatic cover and metadata extraction. Swap the cover if you don't like it
+* Reading progress saved automatically, picks up where you left off
+* Adjustable font size, family, and line spacing; preferences persist
+* Light/dark theme with warm dark palette, manual toggle or follow system
+* Dual-page spread on wide screens, responsive grid in the library
+* Color-coded bookmarks (5 colors), manage in sidebar with jump-to
+* Text highlighting
+* Table of contents with chapter jump
 
-### Supported Formats
+**v1.1.0 adds a compendium system** inspired by The Witcher 3's in-game glossary:
 
-| Format | Status |
-|--------|--------|
-| EPUB | Done |
-| PDF | Planned |
-| TXT | Planned |
-| AZW3 | Planned |
+* Three categories: Characters, Locations, Monsters — each with its own tab
+* Bulk import via AI-generated JSON (see `compendium-guide.md` for the writing guide)
+* Read-to-unlock: entries only appear after you've reached the relevant chapter — no spoilers
+* Discovery log entries unlock progressively per chapter; unread content stays blurred
+* Location entries include a history field; entries can link to each other via relationships (lover, mentor, nemesis, habitat, etc.)
+* In-universe literature quotations that unlock alongside the story
+* A small golden dot on the compendium button when something new unlocks, gone after you check
+* The compendium has its own dark parchment color scheme, separate from the global theme
+* Chapter detection is automatic via epub.js spine index
 
-### Tech Stack
-
-| Category | Technology |
-|----------|------------|
-| Framework | React 19 + TypeScript |
-| Build | Vite 8 |
-| State | Zustand |
-| Database | Dexie.js (IndexedDB) |
-| Styling | Tailwind CSS v4 |
-| EPUB | epub.js |
-| PDF | pdf.js |
-| Animation | motion |
-| PDF | pdf.js |
-| Icons | Lucide React |
-
-### Quick Start
+### Quick start
 
 ```bash
-# Install dependencies
 npm install
-
-# Start dev server
-npm run dev
-
-# Production build
-npm run build
+npm run dev      # development
+npm run build    # production build
+npm run lint     # lint
 ```
 
-### Project Structure
+### Tech
 
-```
-src/
-├── core/          # Interfaces + ServiceRegistry
-├── adapters/      # Storage adapters (swappable)
-├── engines/       # Reader engines (pluggable)
-├── parsers/       # Format parsers (pluggable)
-├── features/      # Feature plugins (pluggable)
-├── plugins/       # Plugin registration
-├── stores/        # Zustand state management
-├── hooks/         # React hooks
-└── components/    # UI components
-```
+React 19 + TypeScript, Vite 8, Zustand, Dexie.js (IndexedDB), Tailwind CSS v4, epub.js, motion, Lucide icons.
 
 ### License
 
 [MIT](LICENSE) © ahine Yang
+
