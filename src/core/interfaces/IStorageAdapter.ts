@@ -1,4 +1,4 @@
-import type { BookRecord, Bookmark, Highlight, ReadingProgress } from '../types'
+import type { BookRecord, Bookmark, CompendiumEntry, CompendiumImportData, Highlight, ReadingProgress } from '../types'
 
 export interface IStorageAdapter {
   saveBook(book: BookRecord): Promise<void>
@@ -25,4 +25,11 @@ export interface IStorageAdapter {
   saveHighlight(highlight: Highlight): Promise<void>
   getHighlights(bookId: string): Promise<Highlight[]>
   deleteHighlight(id: string): Promise<void>
+
+  saveEntry(entry: CompendiumEntry): Promise<void>
+  getEntry(id: string): Promise<CompendiumEntry | null>
+  getEntriesByBook(bookId: string): Promise<CompendiumEntry[]>
+  updateEntry(id: string, patch: Partial<CompendiumEntry>): Promise<void>
+  deleteEntry(id: string): Promise<void>
+  importCompendium(bookId: string, data: CompendiumImportData): Promise<void>
 }
