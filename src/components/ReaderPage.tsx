@@ -50,6 +50,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const getEntryById = useCompendiumStore((s) => s.getEntryById)
   const [compendiumCategory, setCompendiumCategory] = useState<'character' | 'location'>('character')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
+  const [lastViewedChapter, setLastViewedChapter] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importMsg, setImportMsg] = useState('')
 
@@ -360,6 +361,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         <motion.button
           onClick={() => {
             compendiumLoad(bookId).catch(() => {})
+            setLastViewedChapter(useCompendiumStore.getState().currentChapter)
             setSidebarTab('compendium')
           }}
           className="relative rounded-full p-2.5"
@@ -372,7 +374,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           <ScrollText className="h-5 w-5" />
           {(() => {
             const hasNew = compendiumEntries.some((e) =>
-              e.entries.some((r) => r.unlocked && r.chapter === useCompendiumStore.getState().currentChapter),
+              e.entries.some((r) => r.unlocked && r.chapter > lastViewedChapter),
             )
             return hasNew ? (
               <span
@@ -1017,7 +1019,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 whileTap={{ scale: 0.94 }}
                 transition={springPress}
                 style={{ color: 'var(--comp-text)' }}
-                onClick={() => setDetailEntryId(null)}
+                onClick={() => { setDetailEntryId(null); setSidebarTab('compendium') }}
                 aria-label="返回图鉴列表"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -1032,7 +1034,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 whileTap={{ scale: 0.94 }}
                 transition={springPress}
                 style={{ color: 'var(--comp-text)' }}
-                onClick={() => setDetailEntryId(null)}
+                onClick={() => { setDetailEntryId(null); setSidebarTab('compendium') }}
                 aria-label="关闭"
               >
                 <X className="h-5 w-5" />

@@ -23,12 +23,6 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
   loadCompendium: async (bookId: string) => {
     const storage = registry.getStorage()
     const list = await storage.getEntriesByBook(bookId)
-    const { currentChapter } = get()
-    for (const entry of list) {
-      for (const rev of entry.entries) {
-        rev.unlocked = rev.chapter <= currentChapter
-      }
-    }
     set({ entries: list })
   },
 
