@@ -28,14 +28,15 @@ export class EpubEngine implements IReaderEngine {
     })
 
     this.rendition.on('relocated', (location: {
-      start: { cfi: string; displayed: { page: number; total: number } }
+      start: { cfi: string; index: number; displayed: { page: number; total: number } }
       end: { cfi: string }
     }) => {
       const cfi = location.start.cfi
       const progress = this.computeProgress(cfi)
       const page = location.start.displayed.page
       const total = location.start.displayed.total
-      this.emit('locationChange', cfi, progress, page, total)
+      console.log('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
+      this.emit('locationChange', cfi, progress, page, total, location.start.index)
     })
 
     this.rendition.on('selected', (cfiRange: string, contents: { window: { getSelection: () => Selection } }) => {
@@ -73,15 +74,23 @@ export class EpubEngine implements IReaderEngine {
   }
 
   getCurrentLocation(): string {
-    const loc = this.rendition?.currentLocation()
-    return (loc as any)?.start?.cfi ?? ''
+    try {
+      const loc = this.rendition?.currentLocation()
+      return (loc as any)?.start?.cfi ?? ''
+    } catch {
+      return ''
+    }
   }
 
   getProgress(): number {
-    const loc = this.rendition?.currentLocation()
-    const cfi = (loc as any)?.start?.cfi
-    if (!cfi) return 0
-    return this.computeProgress(cfi)
+    try {
+      const loc = this.rendition?.currentLocation()
+      const cfi = (loc as any)?.start?.cfi
+      if (!cfi) return 0
+      return this.computeProgress(cfi)
+    } catch {
+      return 0
+    }
   }
 
   async getTOC(): Promise<TOCItem[]> {
@@ -155,6 +164,29 @@ export class EpubEngine implements IReaderEngine {
 
   resize(width: number, height: number): void {
     this.rendition?.resize(width, height)
+  }
+
+  async getChapterMap(): Promise<Map<number, number>> {
+    const map = new Map<number, number>()
+    if (!this.book) return map
+
+    const toc = await this.getTOC()
+    const spine = (this.book as any).spine
+    let chapterNum = 0
+
+    for (const item of toc) {
+      chapterNum++
+      try {
+        const section = spine.get(item.href)
+        if (section) {
+          map.set(section.index, chapterNum)
+        }
+      } catch {
+        // 跳过无法解析的 TOC 条目
+      }
+    }
+
+    return map
   }
 
   // ── private ──
