@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { BookRecord, Bookmark, Highlight, ReadingProgress } from '../core/types'
+import type { BookRecord, Bookmark, CompendiumEntry, CompendiumImportData, Highlight, ReadingProgress } from '../core/types'
 import type { IStorageAdapter } from '../core/interfaces/IStorageAdapter'
 
 // ── Database Schema ──────────────────────────────────────────
@@ -11,6 +11,7 @@ class ReaderDB extends Dexie {
   readingProgress!: Table<ReadingProgress, string> // keyed by bookId
   files!: Table<{ id: string; data: ArrayBuffer }, string>
   kvStore!: Table<{ key: string; value: unknown }, string>
+  compendium!: Table<CompendiumEntry, string>
 
   constructor() {
     super('EBookReader')
@@ -22,6 +23,10 @@ class ReaderDB extends Dexie {
       readingProgress: 'bookId',
       files: 'id',
       kvStore: 'key',
+    })
+
+    this.version(2).stores({
+      compendium: 'id, bookId, category',
     })
   }
 }
@@ -50,6 +55,7 @@ export class IndexedDBAdapter implements IStorageAdapter {
     await this.db.bookmarks.where('bookId').equals(id).delete()
     await this.db.highlights.where('bookId').equals(id).delete()
     await this.db.readingProgress.delete(id)
+    await this.db.compendium.where('bookId').equals(id).delete()
   }
 
   // 文件二进制存储
@@ -109,6 +115,43 @@ export class IndexedDBAdapter implements IStorageAdapter {
 
   async delete(key: string): Promise<void> {
     await this.db.kvStore.delete(key)
+  }
+
+  // 图鉴
+  async saveEntry(entry: CompendiumEntry): Promise<void> {
+    await this.db.compendium.put(entry)
+  }
+
+  async getEntry(id: string): Promise<CompendiumEntry | null> {
+    return (await this.db.compendium.get(id)) ?? null
+  }
+
+  async getEntriesByBook(bookId: string): Promise<CompendiumEntry[]> {
+    return this.db.compendium.where('bookId').equals(bookId).toArray()
+  }
+
+  async updateEntry(id: string, patch: Partial<CompendiumEntry>): Promise<void> {
+    await this.db.compendium.update(id, patch)
+  }
+
+  async deleteEntry(id: string): Promise<void> {
+    await this.db.compendium.delete(id)
+  }
+
+  async importCompendium(bookId: string, data: CompendiumImportData): Promise<void> {
+    const now = Date.now()
+    const entries: CompendiumEntry[] = [
+      ...data.characters,
+      ...data.locations,
+    ].map((item) => ({
+      ...item,
+      bookId,
+      aliases: item.aliases ?? [],
+      entries: item.entries.map((e) => ({ ...e, unlocked: false })),
+      createdAt: now,
+      updatedAt: now,
+    }))
+    await this.db.compendium.bulkPut(entries)
   }
 
   // 存储用量
