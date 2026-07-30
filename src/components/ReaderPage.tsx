@@ -5,9 +5,10 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useCompendiumStore } from '../stores/compendiumStore'
 import type { TOCItem } from '../core/types'
 
 interface Props {
@@ -31,6 +32,7 @@ const bookmarkColors = [
 const sidebarTabs = [
   { key: 'toc' as const, label: '目录' },
   { key: 'bookmarks' as const, label: '书签' },
+  { key: 'compendium' as const, label: '图鉴' },
   { key: 'settings' as const, label: '设置' },
 ]
 
@@ -41,9 +43,18 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
   const { settings, updateSettings } = useSettingsStore()
+  const compendiumEntries = useCompendiumStore((s) => s.entries)
+  const compendiumLoad = useCompendiumStore((s) => s.loadCompendium)
+  const compendiumImport = useCompendiumStore((s) => s.importFromJSON)
+  const getEntriesByCategory = useCompendiumStore((s) => s.getEntriesByCategory)
+  const getEntryById = useCompendiumStore((s) => s.getEntryById)
+  const [compendiumCategory, setCompendiumCategory] = useState<'character' | 'location'>('character')
+  const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importMsg, setImportMsg] = useState('')
 
   const [toc, setToc] = useState<TOCItem[]>([])
-  const [sidebarTab, setSidebarTab] = useState<'toc' | 'bookmarks' | 'settings' | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<'toc' | 'bookmarks' | 'compendium' | 'settings' | null>(null)
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pageKey, setPageKey] = useState(0)
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
@@ -148,6 +159,34 @@ export function ReaderPage({ bookId, onBack }: Props) {
     updateSettings(patch)
     applySettings({ ...settings, ...patch })
   }
+
+  const handleImportJSON = useCallback(async () => {
+    const input = fileInputRef.current
+    if (!input) return
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const json = JSON.parse(text)
+        await compendiumImport(bookId, json)
+        setImportMsg('导入成功')
+        setTimeout(() => setImportMsg(''), 2000)
+      } catch {
+        setImportMsg('导入失败，请检查 JSON 格式')
+        setTimeout(() => setImportMsg(''), 3000)
+      }
+      input.value = ''
+    }
+    input.click()
+  }, [bookId, compendiumImport])
+
+  const detailEntry = detailEntryId ? getEntryById(detailEntryId) : undefined
+
+  const handleShowEntryDetail = useCallback((id: string) => {
+    setDetailEntryId(id)
+    setSidebarTab(null)
+  }, [])
 
   const toolbarBg = 'var(--color-toolbar)'
   const toolbarBlur = 'blur(24px) saturate(180%)'
@@ -317,6 +356,34 @@ export function ReaderPage({ bookId, onBack }: Props) {
           aria-label="目录"
         >
           <List className="h-5 w-5" />
+        </motion.button>
+        <motion.button
+          onClick={() => {
+            compendiumLoad(bookId).catch(() => {})
+            setSidebarTab('compendium')
+          }}
+          className="relative rounded-full p-2.5"
+          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+          whileTap={{ scale: 0.94 }}
+          transition={springPress}
+          style={{ color: 'var(--color-text)' }}
+          aria-label="图鉴"
+        >
+          <ScrollText className="h-5 w-5" />
+          {(() => {
+            const hasNew = compendiumEntries.some((e) =>
+              e.entries.some((r) => r.unlocked && r.chapter === useCompendiumStore.getState().currentChapter),
+            )
+            return hasNew ? (
+              <span
+                className="absolute right-2 top-2 block h-2 w-2 rounded-full"
+                style={{
+                  background: 'var(--comp-accent, #C9A96E)',
+                  boxShadow: '0 0 6px var(--comp-accent, #C9A96E)',
+                }}
+              />
+            ) : null
+          })()}
         </motion.button>
         <motion.button
           onClick={() => setSidebarTab('settings')}
@@ -679,6 +746,155 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 </div>
               )}
 
+              {/* 图鉴面板 */}
+              {sidebarTab === 'compendium' && (
+                <div className="flex flex-col" style={{ height: 'calc(100% - 56px)' }}>
+                  {/* 分类切换 */}
+                  <div className="flex gap-1 p-4 pb-2">
+                    {([
+                      { key: 'character' as const, label: '人物', icon: User },
+                      { key: 'location' as const, label: '地点', icon: MapPin },
+                    ]).map((cat) => (
+                      <motion.button
+                        key={cat.key}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium"
+                        style={{
+                          background: compendiumCategory === cat.key ? 'var(--color-accent)' : 'var(--color-card)',
+                          color: compendiumCategory === cat.key ? '#fff' : 'var(--color-text)',
+                          border: compendiumCategory === cat.key ? 'none' : '1px solid var(--color-separator)',
+                        }}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        transition={springPress}
+                        onClick={() => setCompendiumCategory(cat.key)}
+                      >
+                        <cat.icon className="h-3.5 w-3.5" />
+                        {cat.label}
+                      </motion.button>
+                    ))}
+                  </div>
+                  {/* 条目列表 */}
+                  <div className="flex-1 overflow-y-auto px-4 pb-4">
+                    {(() => {
+                      const filtered = getEntriesByCategory(compendiumCategory)
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
+                            <ScrollText
+                              className="h-7 w-7"
+                              style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}
+                            />
+                            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                              暂无图鉴数据
+                            </p>
+                            <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
+                              导入 AI 生成的 JSON 文件来填充人物和地点图鉴
+                            </p>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept=".json"
+                              className="hidden"
+                            />
+                            <motion.button
+                              className="mt-1 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+                              style={{
+                                background: 'var(--color-accent)',
+                                color: '#fff',
+                              }}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              transition={springPress}
+                              onClick={handleImportJSON}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              导入 JSON
+                            </motion.button>
+                            {importMsg && (
+                              <motion.p
+                                className="text-xs"
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                style={{ color: importMsg.includes('失败') ? 'var(--color-danger)' : 'var(--color-accent)' }}
+                              >
+                                {importMsg}
+                              </motion.p>
+                            )}
+                          </div>
+                        )
+                      }
+                      return filtered.map((entry, i) => {
+                        const unlockedCount = entry.entries.filter((r) => r.unlocked).length
+                        const totalCount = entry.entries.length
+                        return (
+                          <motion.button
+                            key={entry.id}
+                            className="mb-2 flex w-full items-center gap-3 rounded-xl p-2.5 text-left"
+                            style={{
+                              background: 'var(--color-card)',
+                              boxShadow: 'var(--shadow-card)',
+                            }}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ ...springDefault, delay: i * 0.04 }}
+                            whileHover={{ y: -1, boxShadow: 'var(--shadow-float)' }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handleShowEntryDetail(entry.id)}
+                          >
+                            <div
+                              className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
+                              style={{ background: 'var(--color-separator)' }}
+                            >
+                              {entry.image ? (
+                                <img src={entry.image} alt={entry.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="truncate text-sm font-medium"
+                                style={{ color: 'var(--color-text)' }}
+                              >
+                                {entry.name}
+                              </p>
+                              <p
+                                className="truncate text-xs"
+                                style={{ color: 'var(--color-text-secondary)' }}
+                              >
+                                {entry.description}
+                              </p>
+                            </div>
+                            <div className="flex flex-shrink-0 items-center gap-1">
+                              <span
+                                className="text-xs font-medium"
+                                style={{ color: 'var(--color-text-secondary)' }}
+                              >
+                                {unlockedCount}/{totalCount}
+                              </span>
+                              {totalCount > 0 && (
+                                <div
+                                  className="h-1 w-8 overflow-hidden rounded-full"
+                                  style={{ background: 'var(--color-separator)' }}
+                                >
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${(unlockedCount / totalCount) * 100}%`,
+                                      background: 'var(--color-accent)',
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </motion.button>
+                        )
+                      })
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* 设置面板 */}
               {sidebarTab === 'settings' && (
                 <div className="flex flex-col gap-6 p-5">
@@ -773,6 +989,203 @@ export function ReaderPage({ bookId, onBack }: Props) {
               )}
             </motion.nav>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* 图鉴详情浮层 */}
+      <AnimatePresence>
+        {detailEntry && (
+          <motion.div
+            className="compendium-overlay fixed inset-0 z-30 flex flex-col overflow-y-auto"
+            style={{ background: 'var(--comp-bg)' }}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={springSlide}
+          >
+            {/* 返回按钮 */}
+            <div className="sticky top-0 z-10 flex items-center gap-3 px-3 py-2"
+              style={{
+                background: 'rgba(60, 46, 36, 0.85)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+              }}
+            >
+              <motion.button
+                className="rounded-full p-2"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.94 }}
+                transition={springPress}
+                style={{ color: 'var(--comp-text)' }}
+                onClick={() => setDetailEntryId(null)}
+                aria-label="返回图鉴列表"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </motion.button>
+              <span className="text-sm font-medium" style={{ color: 'var(--comp-text-secondary)' }}>
+                图鉴
+              </span>
+              <div className="flex-1" />
+              <motion.button
+                className="rounded-full p-2"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.94 }}
+                transition={springPress}
+                style={{ color: 'var(--comp-text)' }}
+                onClick={() => setDetailEntryId(null)}
+                aria-label="关闭"
+              >
+                <X className="h-5 w-5" />
+              </motion.button>
+            </div>
+
+            {/* 肖像图 */}
+            {detailEntry.image ? (
+              <div className="relative w-full" style={{ aspectRatio: '16/10', maxHeight: '40vh' }}>
+                <img
+                  src={detailEntry.image}
+                  alt={detailEntry.name}
+                  className="h-full w-full object-cover"
+                />
+                <div
+                  className="absolute inset-x-0 bottom-0"
+                  style={{
+                    height: '40%',
+                    background: 'linear-gradient(to top, var(--comp-bg), transparent)',
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="h-6" />
+            )}
+
+            <div className="px-5 pb-10">
+              {/* 名字 */}
+              <h1
+                className="text-2xl font-bold tracking-tight"
+                style={{
+                  color: 'var(--comp-accent)',
+                  fontFamily: 'Georgia, "Noto Serif", serif',
+                }}
+              >
+                {detailEntry.name}
+              </h1>
+
+              {/* 别名 */}
+              {detailEntry.aliases.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {detailEntry.aliases.map((a) => (
+                    <span
+                      key={a}
+                      className="rounded-full px-2.5 py-0.5 text-xs"
+                      style={{
+                        background: 'var(--comp-separator)',
+                        color: 'var(--comp-text-secondary)',
+                      }}
+                    >
+                      {a}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 描述 */}
+              <p
+                className="mt-4 text-sm leading-relaxed"
+                style={{ color: 'var(--comp-text)' }}
+              >
+                {detailEntry.description}
+              </p>
+
+              {/* 关联条目 */}
+              {detailEntry.relations.length > 0 && (
+                <div className="mt-6">
+                  <h3
+                    className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--comp-text-secondary)' }}
+                  >
+                    相关{detailEntry.category === 'character' ? '人物' : '地点'}
+                  </h3>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {detailEntry.relations.map((rel) => {
+                      const target = getEntryById(rel.targetId)
+                      return (
+                        <motion.button
+                          key={rel.targetId}
+                          className="flex-shrink-0 rounded-xl px-3 py-2 text-left"
+                          style={{
+                            background: 'var(--comp-card)',
+                            border: target ? '1px solid var(--comp-separator)' : 'none',
+                          }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          transition={springPress}
+                          onClick={() => {
+                            if (target) setDetailEntryId(target.id)
+                          }}
+                          disabled={!target}
+                        >
+                          <p className="text-sm font-medium" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
+                            {target?.name ?? rel.targetId}
+                          </p>
+                          <p className="text-xs" style={{ color: 'var(--comp-accent)' }}>
+                            {rel.label}
+                          </p>
+                        </motion.button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 发现日志 */}
+              {detailEntry.entries.length > 0 && (
+                <div className="mt-6">
+                  <h3
+                    className="mb-3 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--comp-text-secondary)' }}
+                  >
+                    发现日志
+                  </h3>
+                  <div className="relative pl-5" style={{ borderLeft: '1px solid var(--comp-separator)' }}>
+                    {detailEntry.entries.map((rev, i) => {
+                      const isLatestUnlocked = rev.unlocked &&
+                        rev.chapter === useCompendiumStore.getState().currentChapter
+                      return (
+                        <div key={i} className="relative mb-4 last:mb-0">
+                          {/* 时间线圆点 */}
+                          <div
+                            className="absolute -left-[21px] top-0.5 h-2.5 w-2.5 rounded-full border-2"
+                            style={{
+                              background: rev.unlocked ? 'var(--comp-accent)' : 'transparent',
+                              borderColor: rev.unlocked ? 'var(--comp-accent)' : 'var(--comp-blur-text)',
+                              boxShadow: isLatestUnlocked ? '0 0 8px var(--comp-accent)' : 'none',
+                            }}
+                          />
+                          <span
+                            className="text-xs font-medium"
+                            style={{ color: rev.unlocked ? 'var(--comp-accent)' : 'var(--comp-blur-text)' }}
+                          >
+                            第 {rev.chapter} 章
+                          </span>
+                          <p
+                            className="mt-0.5 text-sm leading-relaxed"
+                            style={{
+                              color: rev.unlocked ? 'var(--comp-text)' : 'var(--comp-blur-text)',
+                              filter: rev.unlocked ? 'none' : 'blur(2px)',
+                              userSelect: rev.unlocked ? 'text' : 'none',
+                            }}
+                          >
+                            {rev.unlocked ? rev.text : '继续阅读以解锁此条目……'}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
