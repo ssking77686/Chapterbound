@@ -38,7 +38,7 @@ const sidebarTabs = [
 
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { nextPage, prevPage, getEngine, pageInfo, applySettings, error } = useReader(bookId, containerRef)
+  const { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, applySettings, error } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
@@ -171,7 +171,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       try {
         const text = await file.text()
         const json = JSON.parse(text)
-        await compendiumImport(bookId, json)
+        await compendiumImport(bookId, json, getCurrentChapter())
         setImportMsg('导入成功')
         setTimeout(() => setImportMsg(''), 2000)
       } catch {
@@ -181,7 +181,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       input.value = ''
     }
     input.click()
-  }, [bookId, compendiumImport])
+  }, [bookId, compendiumImport, getCurrentChapter])
 
   const detailEntry = detailEntryId ? getEntryById(detailEntryId) : undefined
 
@@ -768,6 +768,12 @@ export function ReaderPage({ bookId, onBack }: Props) {
               {/* 图鉴面板 */}
               {sidebarTab === 'compendium' && (
                 <div className="flex flex-col" style={{ height: 'calc(100% - 56px)' }}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                  />
                   {/* 分类切换 */}
                   <div className="flex gap-1 p-4 pb-2">
                     {([
@@ -812,12 +818,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
                               <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7, lineHeight: 1.8 }}>
                                 ① 下载写作指南 → ② 发给 AI 生成 JSON → ③ 导入
                               </p>
-                              <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".json"
-                                className="hidden"
-                              />
                               <div className="flex items-center gap-2">
                                 <a
                                   href="/guides/compendium-guide.md"
@@ -983,6 +983,20 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           <Download className="h-3 w-3" />
                           使用说明
                         </a>
+                        <motion.button
+                          className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
+                          style={{
+                            background: 'var(--color-accent)',
+                            color: '#fff',
+                          }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          transition={springPress}
+                          onClick={handleImportJSON}
+                        >
+                          <Upload className="h-3 w-3" />
+                          重新导入
+                        </motion.button>
                       </div>
                     )}
                   </div>

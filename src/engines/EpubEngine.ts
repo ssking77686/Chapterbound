@@ -179,17 +179,34 @@ export class EpubEngine implements IReaderEngine {
     const spine = (this.book as any).spine
     let chapterNum = 0
 
-    for (const item of toc) {
-      chapterNum++
-      try {
-        const section = spine.get(item.href)
-        if (section) {
-          map.set(section.index, chapterNum)
+    const walk = (items: TOCItem[]) => {
+      for (const item of items) {
+        let mapped = false
+        try {
+          const section = spine.get(item.href)
+          if (section) {
+            chapterNum++
+            map.set(section.index, chapterNum)
+            mapped = true
+          }
+        } catch {
+          // 跳过无法解析的 TOC 条目
         }
-      } catch {
-        // 跳过无法解析的 TOC 条目
+
+        if (item.children && item.children.length > 0) {
+          walk(item.children)
+        } else if (!mapped) {
+          // 叶子节点但无法映射到 spine，仍计为独立章节
+          chapterNum++
+        }
       }
     }
+
+    walk(toc)
+
+    // 调试：打印完整章节映射
+    const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1])
+    console.log('[EpubEngine] Chapter map (sorted):', JSON.stringify(sorted))
 
     return map
   }

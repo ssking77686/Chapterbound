@@ -155,7 +155,11 @@ export class IndexedDBAdapter implements IStorageAdapter {
       createdAt: now,
       updatedAt: now,
     }))
+    // 先清空旧数据再写入，避免重新导入时残留已删除条目
+    await this.db.compendium.where('bookId').equals(bookId).delete()
     await this.db.compendium.bulkPut(entries)
+    // 重置章节进度，避免新数据被旧进度批量解锁
+    await this.db.kvStore.delete(`compendium:chapter:${bookId}`)
   }
 
   // 图鉴章节进度（按 bookId 隔离，存 kvStore）
