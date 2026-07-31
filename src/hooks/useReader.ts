@@ -17,6 +17,7 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const saveProgress = useProgressStore((s) => s.saveProgress)
   const loadProgress = useProgressStore((s) => s.loadProgress)
   const [pageInfo, setPageInfo] = useState<PageInfo>({ current: 0, total: 0 })
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -29,53 +30,60 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
       const engine = new EpubEngine()
       engineRef.current = engine
 
-      // 监听器必须在 load() 之前注册——load() 内部会触发 relocated 和 ready 事件
-      engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
-        saveProgress(bookId, loc as string, prog as number)
-        if (typeof page === 'number' && typeof total === 'number') {
-          setPageInfo({ current: page, total })
+      try {
+        // 监听器必须在 load() 之前注册——load() 内部会触发 relocated 和 ready 事件
+        engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
+          saveProgress(bookId, loc as string, prog as number)
+          if (typeof page === 'number' && typeof total === 'number') {
+            setPageInfo({ current: page, total })
+          }
+
+          if (typeof spineIndex === 'number') {
+            pendingSpine = spineIndex
+            const chapter = chapterMapRef.current.get(spineIndex)
+            if (chapter !== undefined && chapter !== lastChapterRef.current) {
+              lastChapterRef.current = chapter
+              useCompendiumStore.getState().checkUnlock(chapter)
+            }
+          }
+        })
+
+        await engine.load(data, containerRef.current)
+
+        if (cancelled) {
+          engine.destroy()
+          return
         }
 
-        if (typeof spineIndex === 'number') {
-          pendingSpine = spineIndex
-          const chapter = chapterMapRef.current.get(spineIndex)
+        // load() 完成后初始化 chapterMap 和 compendium
+        const settings = useSettingsStore.getState().settings
+        engine.applySettings(settings)
+
+        chapterMapRef.current = await engine.getChapterMap()
+        useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})
+
+        // 补检初始章节（load 期间的 relocated 可能在 chapterMap 为空时已触发）
+        const savedIndex = pendingSpine
+        if (savedIndex >= 0) {
+          const chapter = chapterMapRef.current.get(savedIndex)
           if (chapter !== undefined && chapter !== lastChapterRef.current) {
             lastChapterRef.current = chapter
             useCompendiumStore.getState().checkUnlock(chapter)
           }
         }
-      })
 
-      await engine.load(data, containerRef.current)
-
-      if (cancelled) {
-        engine.destroy()
-        return
-      }
-
-      // load() 完成后初始化 chapterMap 和 compendium
-      const settings = useSettingsStore.getState().settings
-      engine.applySettings(settings)
-
-      chapterMapRef.current = await engine.getChapterMap()
-      useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})
-
-      // 补检初始章节（load 期间的 relocated 可能在 chapterMap 为空时已触发）
-      const savedIndex = pendingSpine
-      if (savedIndex >= 0) {
-        const chapter = chapterMapRef.current.get(savedIndex)
-        if (chapter !== undefined && chapter !== lastChapterRef.current) {
-          lastChapterRef.current = chapter
-          useCompendiumStore.getState().checkUnlock(chapter)
+        loadProgress(bookId).then(() => {
+          if (cancelled) return
+          const p = useProgressStore.getState().current
+          if (p?.location) {
+            engine.goToLocation(p.location)
+          }
+        })
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '加载失败')
         }
       }
-
-      loadProgress(bookId).then(() => {
-        const p = useProgressStore.getState().current
-        if (p?.location) {
-          engine.goToLocation(p.location)
-        }
-      })
     }
 
     init()
@@ -105,5 +113,5 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
     return () => ro.disconnect()
   }, [pageInfo.total, containerRef])
 
-  return { nextPage, prevPage, getEngine, pageInfo, applySettings }
+  return { nextPage, prevPage, getEngine, pageInfo, applySettings, error }
 }
