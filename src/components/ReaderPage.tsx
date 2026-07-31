@@ -5,7 +5,7 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull } from 'lucide-react'
+import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore } from '../stores/compendiumStore'
@@ -328,16 +328,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
           </AnimatePresence>
         </div>
         <motion.button
-          className="rounded-full p-2.5"
-          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
-          whileTap={{ scale: 0.94 }}
-          transition={springPress}
-          style={{ color: 'var(--color-text)' }}
-          aria-label="高亮"
-        >
-          <Highlighter className="h-5 w-5" />
-        </motion.button>
-        <motion.button
           onClick={toggleTheme}
           className="rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
@@ -425,9 +415,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
           onMouseLeave={() => setHoveredEdge(null)}
           onClick={(e) => {
-            const { clientX, currentTarget } = e
-            const mid = currentTarget.clientWidth / 2
-            if (clientX < mid) handlePrev()
+            const relX = e.clientX - e.currentTarget.getBoundingClientRect().left
+            const mid = e.currentTarget.clientWidth / 2
+            if (relX < mid) handlePrev()
             else handleNext()
           }}
         >
