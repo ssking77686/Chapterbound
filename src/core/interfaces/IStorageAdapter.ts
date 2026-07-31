@@ -32,4 +32,7 @@ export interface IStorageAdapter {
   updateEntry(id: string, patch: Partial<CompendiumEntry>): Promise<void>
   deleteEntry(id: string): Promise<void>
   importCompendium(bookId: string, data: CompendiumImportData): Promise<void>
+
+  saveCompendiumChapter(bookId: string, chapter: number): Promise<void>
+  getCompendiumChapter(bookId: string): Promise<number>
 }
