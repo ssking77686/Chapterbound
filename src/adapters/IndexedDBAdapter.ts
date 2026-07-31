@@ -158,6 +158,16 @@ export class IndexedDBAdapter implements IStorageAdapter {
     await this.db.compendium.bulkPut(entries)
   }
 
+  // 图鉴章节进度（按 bookId 隔离，存 kvStore）
+  async saveCompendiumChapter(bookId: string, chapter: number): Promise<void> {
+    await this.db.kvStore.put({ key: `compendium:chapter:${bookId}`, value: chapter })
+  }
+
+  async getCompendiumChapter(bookId: string): Promise<number> {
+    const record = await this.db.kvStore.get(`compendium:chapter:${bookId}`)
+    return (record?.value as number) ?? 0
+  }
+
   // 存储用量
   async getUsageInfo(): Promise<{ used: number; quota: number }> {
     if ('storage' in navigator && 'estimate' in navigator.storage) {
