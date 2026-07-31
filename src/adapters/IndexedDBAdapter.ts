@@ -158,7 +158,7 @@ export class IndexedDBAdapter implements IStorageAdapter {
     await this.db.compendium.bulkPut(entries)
   }
 
-  // 图鉴章节进度
+  // 图鉴章节进度（按 bookId 隔离，存 kvStore）
   async saveCompendiumChapter(bookId: string, chapter: number): Promise<void> {
     await this.db.kvStore.put({ key: `compendium:chapter:${bookId}`, value: chapter })
   }

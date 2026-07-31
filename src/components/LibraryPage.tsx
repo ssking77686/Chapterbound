@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useBookshelfStore } from '../stores/bookshelfStore'
-import { BookOpen, Trash2, Plus, Sun, Moon, ImageIcon, Undo2 } from 'lucide-react'
+import { BookOpen, Trash2, Plus, Sun, Moon, ImageIcon, Undo2, Info } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
+import { AboutOverlay } from './AboutOverlay'
 
 interface Props {
   onOpenBook: (id: string) => void
@@ -20,6 +21,7 @@ export function LibraryPage({ onOpenBook }: Props) {
   const [scrolled, setScrolled] = useState(false)
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
   const [editingCoverId, setEditingCoverId] = useState<string | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const pendingRemovals = useRef<Set<string>>(new Set())
 
   useEffect(() => {
@@ -103,6 +105,17 @@ export function LibraryPage({ onOpenBook }: Props) {
               aria-label={isDark ? '切换日间模式' : '切换暗夜模式'}
             >
               {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </motion.button>
+            <motion.button
+              onClick={() => setAboutOpen(true)}
+              className="rounded-full p-2.5"
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.9 }}
+              transition={springPress}
+              style={{ color: 'var(--color-text)' }}
+              aria-label="关于项目"
+            >
+              <Info className="h-5 w-5" />
             </motion.button>
             <motion.label
             className="inline-flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white"
@@ -295,6 +308,8 @@ export function LibraryPage({ onOpenBook }: Props) {
           </motion.div>
         )}
       </main>
+
+      <AboutOverlay open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   )
 }

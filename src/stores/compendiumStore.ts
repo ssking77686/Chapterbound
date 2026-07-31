@@ -31,9 +31,8 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
   loadCompendium: async (bookId: string) => {
     const storage = registry.getStorage()
     const list = await storage.getEntriesByBook(bookId)
-    // 从存储读取章节号——按 bookId 隔离，避免跨书籍污染
-    const storedChapter = await storage.getCompendiumChapter(bookId)
-    const currentChapter = storedChapter
+    // 从存储读取当前书籍的章节进度，实现按 bookId 隔离
+    const currentChapter = await storage.getCompendiumChapter(bookId)
     const updated = list.map((entry) => {
       let changed = false
       const newEntries = entry.entries.map((rev) => {
@@ -84,7 +83,7 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
       })
       return { entries: updated, currentChapter: chapter }
     })
-    // 持久化章节进度——fire-and-forget，不阻塞翻页
+    // 持久化章节进度，按 bookId 隔离；fire-and-forget 不阻塞翻页
     const bookId = get().entries[0]?.bookId
     if (bookId) {
       registry.getStorage().saveCompendiumChapter(bookId, chapter).catch(() => {})

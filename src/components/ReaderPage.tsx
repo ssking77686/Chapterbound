@@ -849,7 +849,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
                             <ScrollText
                               className="h-7 w-7"
-                              style={{ color: 'var(--comp-accent)', opacity: 0.5 }}
+                              style={{ color: 'var(--comp-accent, #C9A96E)', opacity: 0.5 }}
                             />
                             <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                               继续阅读以发现{compendiumCategory === 'character' ? '人物' : compendiumCategory === 'location' ? '地点' : '怪物'}
