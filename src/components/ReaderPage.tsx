@@ -809,8 +809,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                               <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                                 暂无图鉴数据
                               </p>
-                              <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
-                                导入 AI 生成的 JSON 文件来填充人物、地点和怪物图鉴
+                              <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7, lineHeight: 1.8 }}>
+                                ① 下载写作指南 → ② 发给 AI 生成 JSON → ③ 导入
                               </p>
                               <input
                                 ref={fileInputRef}
@@ -818,36 +818,43 @@ export function ReaderPage({ bookId, onBack }: Props) {
                                 accept=".json"
                                 className="hidden"
                               />
-                              <motion.button
-                                className="mt-1 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
-                                style={{
-                                  background: 'var(--color-accent)',
-                                  color: '#fff',
-                                }}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                transition={springPress}
-                                onClick={handleImportJSON}
-                              >
-                                <Upload className="h-3.5 w-3.5" />
-                                导入 JSON
-                              </motion.button>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href="/guides/compendium-guide.md"
+                                  download
+                                  className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+                                  style={{
+                                    background: 'var(--color-card)',
+                                    color: 'var(--color-text)',
+                                    border: '1px solid var(--color-separator)',
+                                  }}
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  下载指南
+                                </a>
+                                <motion.button
+                                  className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+                                  style={{
+                                    background: 'var(--color-accent)',
+                                    color: '#fff',
+                                  }}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  transition={springPress}
+                                  onClick={handleImportJSON}
+                                >
+                                  <Upload className="h-3.5 w-3.5" />
+                                  导入 JSON
+                                </motion.button>
+                              </div>
                               <a
-                                href="/guides/compendium-guide.md"
+                                href="/guides/compendium-readme.md"
                                 download
-                                className="mt-1 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
-                                style={{
-                                  background: 'var(--color-card)',
-                                  color: 'var(--color-text)',
-                                  border: '1px solid var(--color-separator)',
-                                }}
+                                className="text-xs underline underline-offset-2"
+                                style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }}
                               >
-                                <Download className="h-3.5 w-3.5" />
-                                下载写作指南
+                                使用说明
                               </a>
-                              <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }}>
-                                将指南发给 AI 即可生成图鉴 JSON
-                              </p>
                               {importMsg && (
                                 <motion.p
                                   className="text-xs"
@@ -946,6 +953,38 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         )
                       })
                     })()}
+                    {/* 底部常驻入口 — 有数据后仍然可见 */}
+                    {compendiumEntries.length > 0 && (
+                      <div className="mt-4 flex items-center justify-center gap-3 border-t pt-4" style={{ borderColor: 'var(--color-separator)' }}>
+                        <a
+                          href="/guides/compendium-guide.md"
+                          download
+                          className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
+                          style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-separator)' }}
+                        >
+                          <Download className="h-3 w-3" />
+                          写作指南
+                        </a>
+                        <a
+                          href="/guides/compendium-schema.md"
+                          download
+                          className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
+                          style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-separator)' }}
+                        >
+                          <Download className="h-3 w-3" />
+                          字段速查
+                        </a>
+                        <a
+                          href="/guides/compendium-readme.md"
+                          download
+                          className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
+                          style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-separator)' }}
+                        >
+                          <Download className="h-3 w-3" />
+                          使用说明
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
