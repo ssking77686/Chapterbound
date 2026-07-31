@@ -48,7 +48,10 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
           }
         })
 
-        await engine.load(data, containerRef.current)
+        // 先加载阅读进度，直接传入 display() 避免首页闪烁
+        await loadProgress(bookId)
+        const savedLoc = useProgressStore.getState().current?.location
+        await engine.load(data, containerRef.current, savedLoc)
 
         if (cancelled) {
           engine.destroy()
@@ -71,14 +74,6 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
             useCompendiumStore.getState().checkUnlock(chapter)
           }
         }
-
-        loadProgress(bookId).then(() => {
-          if (cancelled) return
-          const p = useProgressStore.getState().current
-          if (p?.location) {
-            engine.goToLocation(p.location)
-          }
-        })
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : '加载失败')

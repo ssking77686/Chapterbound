@@ -15,7 +15,7 @@ export class EpubEngine implements IReaderEngine {
   private rendition: Rendition | null = null
   private listeners = new Map<string, Set<EventCallback>>()
 
-  async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
+  async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
     this.book = Epub(data) as Book
 
     const rect = container.getBoundingClientRect()
@@ -45,7 +45,12 @@ export class EpubEngine implements IReaderEngine {
     })
 
     await this.book.ready
-    await this.rendition.display()
+    try {
+      await this.rendition.display(startLoc)
+    } catch {
+      // 保存的 CFI 可能损坏，fallback 到首页
+      await this.rendition.display()
+    }
     this.emit('ready')
 
     this.book.locations.generate(150).catch(() => {
