@@ -91,6 +91,7 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const nextPage = useCallback(() => engineRef.current?.nextPage(), [])
   const prevPage = useCallback(() => engineRef.current?.prevPage(), [])
   const getEngine = useCallback(() => engineRef.current, [])
+  const getCurrentChapter = useCallback(() => lastChapterRef.current, [])
   const applySettings = useCallback((settings: { fontSize: number; fontFamily: string; lineHeight: number }) => {
     engineRef.current?.applySettings(settings)
   }, [])
@@ -108,5 +109,5 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
     return () => ro.disconnect()
   }, [pageInfo.total, containerRef])
 
-  return { nextPage, prevPage, getEngine, pageInfo, applySettings, error }
+  return { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, applySettings, error }
 }

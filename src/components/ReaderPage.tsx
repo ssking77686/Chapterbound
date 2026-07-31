@@ -38,7 +38,7 @@ const sidebarTabs = [
 
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { nextPage, prevPage, getEngine, pageInfo, applySettings, error } = useReader(bookId, containerRef)
+  const { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, applySettings, error } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
@@ -171,7 +171,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       try {
         const text = await file.text()
         const json = JSON.parse(text)
-        await compendiumImport(bookId, json)
+        await compendiumImport(bookId, json, getCurrentChapter())
         setImportMsg('导入成功')
         setTimeout(() => setImportMsg(''), 2000)
       } catch {
@@ -181,7 +181,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       input.value = ''
     }
     input.click()
-  }, [bookId, compendiumImport])
+  }, [bookId, compendiumImport, getCurrentChapter])
 
   const detailEntry = detailEntryId ? getEntryById(detailEntryId) : undefined
 

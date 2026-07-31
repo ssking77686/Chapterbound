@@ -8,7 +8,7 @@ interface CompendiumState {
   lastViewedAt: number
 
   loadCompendium: (bookId: string) => Promise<void>
-  importFromJSON: (bookId: string, json: CompendiumImportData) => Promise<void>
+  importFromJSON: (bookId: string, json: CompendiumImportData, readerChapter?: number) => Promise<void>
   checkUnlock: (chapter: number) => void
   markViewed: () => void
   addEntry: (entry: CompendiumEntry) => Promise<void>
@@ -54,10 +54,15 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     set({ entries: updated, currentChapter })
   },
 
-  importFromJSON: async (bookId: string, json: CompendiumImportData) => {
+  importFromJSON: async (bookId: string, json: CompendiumImportData, readerChapter?: number) => {
     const storage = registry.getStorage()
+    // 优先用阅读器传入的当前章节，fallback 到 store 内存中的值
+    const effectiveChapter = readerChapter ?? get().currentChapter
     await storage.importCompendium(bookId, json)
     await get().loadCompendium(bookId)
+    if (effectiveChapter > 0) {
+      get().checkUnlock(effectiveChapter)
+    }
   },
 
   checkUnlock: (chapter: number) => {
