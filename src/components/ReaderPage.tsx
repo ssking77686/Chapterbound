@@ -5,7 +5,7 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, Highlighter, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull } from 'lucide-react'
+import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore } from '../stores/compendiumStore'
@@ -38,7 +38,7 @@ const sidebarTabs = [
 
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { nextPage, prevPage, getEngine, pageInfo, applySettings } = useReader(bookId, containerRef)
+  const { nextPage, prevPage, getEngine, pageInfo, applySettings, error } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
@@ -328,16 +328,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
           </AnimatePresence>
         </div>
         <motion.button
-          className="rounded-full p-2.5"
-          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
-          whileTap={{ scale: 0.94 }}
-          transition={springPress}
-          style={{ color: 'var(--color-text)' }}
-          aria-label="高亮"
-        >
-          <Highlighter className="h-5 w-5" />
-        </motion.button>
-        <motion.button
           onClick={toggleTheme}
           className="rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
@@ -406,6 +396,27 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
       {/* 阅读区域 */}
       <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
+        {error && pageInfo.total === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4">
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              加载失败：{error}
+            </p>
+            <motion.button
+              onClick={onBack}
+              className="rounded-full px-5 py-2.5 text-sm font-medium"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={springPress}
+              style={{
+                background: 'var(--color-accent)',
+                color: '#fff',
+              }}
+            >
+              返回书架
+            </motion.button>
+          </div>
+        ) : (
+        <>
         {/* 阅读卡片 — 翻页滑入动效 */}
         <motion.div
           ref={cardScope}
@@ -425,9 +436,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
           onMouseLeave={() => setHoveredEdge(null)}
           onClick={(e) => {
-            const { clientX, currentTarget } = e
-            const mid = currentTarget.clientWidth / 2
-            if (clientX < mid) handlePrev()
+            const relX = e.clientX - e.currentTarget.getBoundingClientRect().left
+            const mid = e.currentTarget.clientWidth / 2
+            if (relX < mid) handlePrev()
             else handleNext()
           }}
         >
@@ -562,6 +573,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
         >
           <ChevronRight className="h-4 w-4" />
         </motion.button>
+        </>
+      )}
       </div>
 
       {/* 页码 — 浮动胶囊 */}
