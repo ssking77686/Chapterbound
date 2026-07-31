@@ -5,7 +5,7 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull } from 'lucide-react'
+import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore } from '../stores/compendiumStore'
@@ -832,6 +832,22 @@ export function ReaderPage({ bookId, onBack }: Props) {
                                 <Upload className="h-3.5 w-3.5" />
                                 导入 JSON
                               </motion.button>
+                              <a
+                                href="/guides/compendium-guide.md"
+                                download
+                                className="mt-1 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+                                style={{
+                                  background: 'var(--color-card)',
+                                  color: 'var(--color-text)',
+                                  border: '1px solid var(--color-separator)',
+                                }}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                下载写作指南
+                              </a>
+                              <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }}>
+                                将指南发给 AI 即可生成图鉴 JSON
+                              </p>
                               {importMsg && (
                                 <motion.p
                                   className="text-xs"
