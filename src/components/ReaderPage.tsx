@@ -38,7 +38,7 @@ const sidebarTabs = [
 
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { nextPage, prevPage, getEngine, pageInfo, applySettings } = useReader(bookId, containerRef)
+  const { nextPage, prevPage, getEngine, pageInfo, applySettings, error } = useReader(bookId, containerRef)
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
@@ -406,6 +406,27 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
       {/* 阅读区域 */}
       <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
+        {error && pageInfo.total === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4">
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              加载失败：{error}
+            </p>
+            <motion.button
+              onClick={onBack}
+              className="rounded-full px-5 py-2.5 text-sm font-medium"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={springPress}
+              style={{
+                background: 'var(--color-accent)',
+                color: '#fff',
+              }}
+            >
+              返回书架
+            </motion.button>
+          </div>
+        ) : (
+        <>
         {/* 阅读卡片 — 翻页滑入动效 */}
         <motion.div
           ref={cardScope}
@@ -562,6 +583,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
         >
           <ChevronRight className="h-4 w-4" />
         </motion.button>
+        </>
+      )}
       </div>
 
       {/* 页码 — 浮动胶囊 */}
