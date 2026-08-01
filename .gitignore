@@ -23,6 +23,11 @@ dist-ssr
 *.png
 *.jpg
 *.jpeg
+!public/shelf.png
+!public/reader.png
+!public/compendium-list.png
+!public/compendium-detail.png
+!public/compendium-location.png
 
 # Claude Code
 .claude/
