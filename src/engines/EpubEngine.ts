@@ -203,11 +203,6 @@ export class EpubEngine implements IReaderEngine {
     }
 
     walk(toc)
-
-    // 调试：打印完整章节映射
-    const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1])
-    console.log('[EpubEngine] Chapter map (sorted):', JSON.stringify(sorted))
-
     return map
   }
 
