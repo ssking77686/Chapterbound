@@ -57,14 +57,14 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     const currentChapter = await storage.getCompendiumChapter(bookId)
     const updated = list.map((entry) => {
       let changed = false
-      const newEntries = entry.entries.map((rev) => {
+      const newEntries = (entry.entries ?? []).map((rev) => {
         if (!rev.unlocked && rev.chapter <= currentChapter) {
           changed = true
           return { ...rev, unlocked: true }
         }
         return rev
       })
-      const newQuotations = entry.quotations.map((q) => {
+      const newQuotations = (entry.quotations ?? []).map((q) => {
         if (!q.unlocked && q.chapter !== undefined && q.chapter <= currentChapter) {
           changed = true
           return { ...q, unlocked: true }
@@ -92,14 +92,14 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     set((state) => {
       const updated = state.entries.map((entry) => {
         let changed = false
-        const newEntries = entry.entries.map((rev) => {
+        const newEntries = (entry.entries ?? []).map((rev) => {
           if (!rev.unlocked && rev.chapter <= chapter) {
             changed = true
             return { ...rev, unlocked: true }
           }
           return rev
         })
-        const newQuotations = entry.quotations.map((q) => {
+        const newQuotations = (entry.quotations ?? []).map((q) => {
           if (!q.unlocked && q.chapter !== undefined && q.chapter <= chapter) {
             changed = true
             return { ...q, unlocked: true }
@@ -147,8 +147,8 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     return get()
       .entries.filter((e) => e.category === category)
       .sort((a, b) => {
-        const aUnlocked = a.entries.filter((r) => r.unlocked).length
-        const bUnlocked = b.entries.filter((r) => r.unlocked).length
+        const aUnlocked = (a.entries ?? []).filter((r) => r.unlocked).length
+        const bUnlocked = (b.entries ?? []).filter((r) => r.unlocked).length
         return bUnlocked - aUnlocked
       })
   },

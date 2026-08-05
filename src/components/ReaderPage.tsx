@@ -53,7 +53,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [compendiumCategory, setCompendiumCategory] = useState<'character' | 'location' | 'monster'>('character')
   const [compendiumSearch, setCompendiumSearch] = useState('')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const searchEntries = useCompendiumStore((s) => s.searchEntries)
   const [importMsg, setImportMsg] = useState('')
   const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
@@ -191,22 +190,24 @@ export function ReaderPage({ bookId, onBack }: Props) {
   }
 
   const handleImportJSON = useCallback(async () => {
-    const input = fileInputRef.current
-    if (!input) return
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
     input.onchange = async () => {
       const file = input.files?.[0]
-      if (!file) return
+      if (!file) { input.remove(); return }
       try {
         const text = await file.text()
         const json = JSON.parse(text)
         await compendiumImport(bookId, json, getCurrentChapter())
         setImportMsg('导入成功')
         setTimeout(() => setImportMsg(''), 2000)
-      } catch {
+      } catch (e) {
+        console.error('[import] failed:', e)
         setImportMsg('导入失败，请检查 JSON 格式')
         setTimeout(() => setImportMsg(''), 3000)
       }
-      input.value = ''
+      input.remove()
     }
     input.click()
   }, [bookId, compendiumImport, getCurrentChapter])
@@ -394,8 +395,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           {(() => {
             const hasNew = compendiumEntries.some((e) =>
               e.updatedAt > compendiumLastViewedAt && (
-                e.entries.some((r) => r.unlocked) ||
-                e.quotations.some((q) => q.unlocked !== false)
+                (e.entries ?? []).some((r) => r.unlocked) ||
+                (e.quotations ?? []).some((q) => q.unlocked !== false)
               ),
             )
             return hasNew ? (
@@ -882,12 +883,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
               {/* 图鉴面板 */}
               {sidebarTab === 'compendium' && (
                 <div className="flex flex-col" style={{ height: 'calc(100% - 56px)' }}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                  />
                   {/* 分类切换 */}
                   <div className="flex gap-1 p-4 pb-2">
                     {([
@@ -1045,8 +1040,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         )
                       }
                       return filtered.map(({ entry }, i) => {
-                        const unlockedCount = entry.entries.filter((r) => r.unlocked).length
-                        const totalCount = entry.entries.length
+                        const unlockedCount = (entry.entries ?? []).filter((r) => r.unlocked).length
+                        const totalCount = (entry.entries ?? []).length
                         return (
                           <motion.button
                             key={entry.id}
@@ -1442,7 +1437,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
               )}
 
               {/* 文献引述 */}
-              {detailEntry.quotations.length > 0 && (
+              {(detailEntry.quotations ?? []).length > 0 && (
                 <div className="mt-6">
                   <h3
                     className="mb-3 text-xs font-semibold uppercase tracking-wider"
@@ -1451,7 +1446,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     文献引述
                   </h3>
                   <div className="flex flex-col gap-4">
-                    {detailEntry.quotations.map((q, i) => (
+                    {(detailEntry.quotations ?? []).map((q, i) => (
                       <div
                         key={i}
                         className="relative"
@@ -1485,7 +1480,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
               )}
 
               {/* 发现日志 */}
-              {detailEntry.entries.length > 0 && (
+              {(detailEntry.entries ?? []).length > 0 && (
                 <div className="mt-6">
                   <h3
                     className="mb-3 text-xs font-semibold uppercase tracking-wider"
@@ -1494,7 +1489,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     发现日志
                   </h3>
                   <div className="relative pl-5" style={{ borderLeft: '1px solid var(--comp-separator)' }}>
-                    {detailEntry.entries.map((rev, i) => {
+                    {(detailEntry.entries ?? []).map((rev, i) => {
                       const isLatestUnlocked = rev.unlocked &&
                         rev.chapter === useCompendiumStore.getState().currentChapter
                       return (
