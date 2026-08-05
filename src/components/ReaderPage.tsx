@@ -64,6 +64,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [pageKey, setPageKey] = useState(0)
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [relationsExpanded, setRelationsExpanded] = useState(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnDirection = useRef(0)
   const pageInfoRef = useRef(pageInfo)
@@ -217,6 +218,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const handleShowEntryDetail = useCallback((id: string) => {
     setDetailEntryId(id)
     setSidebarTab(null)
+    setRelationsExpanded(false)
   }, [])
 
   const toolbarBg = 'var(--color-toolbar)'
@@ -492,7 +494,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 transition={springPress}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   const results = searchEntries(selData.text)
                   if (results.length === 1) {
                     handleShowEntryDetail(results[0].entry.id)
@@ -513,7 +516,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             <>
               <div
                 className="fixed inset-0 z-30"
-                onClick={() => { setSelData(null); setSelResults(null) }}
+                onClick={(e) => { e.stopPropagation(); setSelData(null); setSelResults(null) }}
               />
               <div
                 className="fixed z-40 flex max-h-48 w-56 flex-col overflow-y-auto rounded-2xl p-1.5 shadow-xl"
@@ -536,7 +539,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       whileHover={{ background: 'var(--color-separator)' }}
                       whileTap={{ scale: 0.98 }}
                       transition={springPress}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         handleShowEntryDetail(r.entry.id)
                         setSelData(null)
                         setSelResults(null)
@@ -1388,9 +1392,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   >
                     相关{detailEntry.category === 'character' ? '人物' : detailEntry.category === 'location' ? '地点' : '怪物'}
                   </h3>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {(() => {
-                      // 计算每个关联目标的重要性：entries数量 + 全局被引用次数
                       const globalRefCount = new Map<string, number>()
                       for (const e of compendiumEntries) {
                         for (const r of e.relations) {
@@ -1404,33 +1407,64 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         const bScore = (bTarget?.entries.length ?? 0) + (globalRefCount.get(b.targetId) ?? 0)
                         return bScore - aScore
                       })
-                      return sorted.map((rel) => {
-                        const target = getEntryById(rel.targetId)
-                        return (
-                          <motion.button
-                            key={rel.targetId}
-                            className="flex items-center justify-between rounded-xl px-3 py-2.5 text-left"
-                            style={{
-                              background: 'var(--comp-card)',
-                              border: target ? '1px solid var(--comp-separator)' : 'none',
-                            }}
-                            whileHover={{ y: -1, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-                            whileTap={{ scale: 0.98 }}
-                            transition={springPress}
-                            onClick={() => {
-                              if (target) setDetailEntryId(target.id)
-                            }}
-                            disabled={!target}
-                          >
-                            <span className="text-sm font-medium truncate" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
-                              {target?.name ?? rel.targetId}
-                            </span>
-                            <span className="ml-2 flex-shrink-0 text-xs" style={{ color: 'var(--comp-accent)' }}>
-                              {rel.label}
-                            </span>
-                          </motion.button>
-                        )
-                      })
+                      const MAX_VISIBLE = 8
+                      const visible = relationsExpanded ? sorted : sorted.slice(0, MAX_VISIBLE)
+                      const hiddenCount = sorted.length - MAX_VISIBLE
+                      return (
+                        <>
+                          {visible.map((rel) => {
+                            const target = getEntryById(rel.targetId)
+                            return (
+                              <motion.button
+                                key={rel.targetId}
+                                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-left"
+                                style={{
+                                  background: 'var(--comp-card)',
+                                  border: target ? '1px solid var(--comp-separator)' : 'none',
+                                }}
+                                whileHover={{ y: -1, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                                whileTap={{ scale: 0.96 }}
+                                transition={springPress}
+                                onClick={() => {
+                                  if (target) handleShowEntryDetail(target.id)
+                                }}
+                                disabled={!target}
+                              >
+                                <span className="text-xs font-medium max-w-[120px] truncate" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
+                                  {target?.name ?? rel.targetId}
+                                </span>
+                                <span className="text-[10px] opacity-60" style={{ color: 'var(--comp-accent)' }}>
+                                  {rel.label}
+                                </span>
+                              </motion.button>
+                            )
+                          })}
+                          {!relationsExpanded && hiddenCount > 0 && (
+                            <motion.button
+                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs"
+                              style={{ color: 'var(--comp-accent)', border: '1px dashed var(--comp-separator)' }}
+                              whileHover={{ background: 'var(--comp-separator)' }}
+                              whileTap={{ scale: 0.96 }}
+                              transition={springPress}
+                              onClick={() => setRelationsExpanded(true)}
+                            >
+                              展开全部 ({hiddenCount})
+                            </motion.button>
+                          )}
+                          {relationsExpanded && hiddenCount > 0 && (
+                            <motion.button
+                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs"
+                              style={{ color: 'var(--comp-text-secondary)', border: '1px dashed var(--comp-separator)' }}
+                              whileHover={{ background: 'var(--comp-separator)' }}
+                              whileTap={{ scale: 0.96 }}
+                              transition={springPress}
+                              onClick={() => setRelationsExpanded(false)}
+                            >
+                              收起
+                            </motion.button>
+                          )}
+                        </>
+                      )
                     })()}
                   </div>
                 </div>

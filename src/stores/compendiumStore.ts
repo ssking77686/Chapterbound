@@ -164,7 +164,7 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     for (const entry of get().entries) {
       if (category && entry.category !== category) continue
       const score = scoreEntry(entry, q)
-      if (score > 0) results.push({ entry, score })
+      if (score >= 20) results.push({ entry, score })
     }
     results.sort((a, b) => b.score - a.score)
     return results
