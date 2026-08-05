@@ -24,11 +24,6 @@ interface CompendiumState {
   searchEntries: (query: string, category?: 'character' | 'location' | 'monster') => SearchResult[]
 }
 
-function hasUnlockedContent(entry: CompendiumEntry): boolean {
-  return entry.entries.some((r) => r.unlocked) ||
-    entry.quotations.some((q) => q.unlocked !== false)
-}
-
 function scoreEntry(entry: CompendiumEntry, query: string): number {
   const q = query.toLowerCase()
   let score = 0
@@ -150,7 +145,7 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
 
   getEntriesByCategory: (category: 'character' | 'location' | 'monster') => {
     return get()
-      .entries.filter((e) => e.category === category && hasUnlockedContent(e))
+      .entries.filter((e) => e.category === category)
       .sort((a, b) => {
         const aUnlocked = a.entries.filter((r) => r.unlocked).length
         const bUnlocked = b.entries.filter((r) => r.unlocked).length
@@ -167,7 +162,6 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
     if (!q) return []
     const results: SearchResult[] = []
     for (const entry of get().entries) {
-      if (!hasUnlockedContent(entry)) continue
       if (category && entry.category !== category) continue
       const score = scoreEntry(entry, q)
       if (score > 0) results.push({ entry, score })
