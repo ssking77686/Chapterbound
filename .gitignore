@@ -28,6 +28,18 @@ dist-ssr
 !public/compendium-list.png
 !public/compendium-detail.png
 !public/compendium-location.png
+!src-tauri/icons/*.png
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Electron build artifacts
+release/
+
+# Rust
+*.rs.bk
+*.rlib
 
 # Claude Code
 .claude/

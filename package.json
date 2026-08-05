@@ -7,10 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "electron:dev": "NODE_ENV=dev electron electron/main.cjs",
+    "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "^2.11.1",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
     "epubjs": "^0.3.93",
@@ -21,11 +25,35 @@
     "tailwindcss": "^4.3.3",
     "zustand": "^5.0.14"
   },
+  "build": {
+    "appId": "com.ereader.app",
+    "productName": "电子阅读器",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "src-tauri/icons/icon.ico"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "src-tauri/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "unicode": true
+    }
+  },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
