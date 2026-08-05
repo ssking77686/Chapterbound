@@ -37,6 +37,8 @@ The project's standout feature. As you read, characters, locations, and monsters
 - **Independent color scheme** — the compendium has its own dark parchment palette, separate from global theme
 - **AI-assisted generation** — built-in writing guide, send it to any AI along with your book to generate compendium JSON
 - **Re-import support** — re-import updated JSON, old data is auto-purged, chapter progress resets
+- **Independent font scaling** — separate text size control for the compendium, four levels, doesn't affect reader settings
+- **Dual-column on ultrawide** — profile info and reading content side-by-side for efficient screen use
 
 ---
 
@@ -77,6 +79,16 @@ npm run lint     # lint
 ---
 
 ## Changelog
+
+**v1.2.0** (2026-08)
+- Compendium dual-column layout: profile info and reading content side-by-side on ultrawide screens
+- Independent compendium font scaling: Apple-style 4-level control with persistent preference
+- Compact relation chips: horizontal tag layout with importance-sorted fold, handles 113+ relations gracefully
+- Typography overhaul: bumped body/heading sizes for comfortable reading on dark parchment background
+- Ultrawide reading area expansion: epub.js dual-page spread adapts to 1600px+ screens
+- Search precision: filtered out description-only noise matches
+- Selection search fix: clicking results no longer triggers accidental page turns
+- Import compatibility fix
 
 **v1.1.1** (2026-08)
 - About page with repo link and contributor info

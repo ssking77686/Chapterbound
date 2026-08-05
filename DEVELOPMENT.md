@@ -62,7 +62,8 @@ src/
 | `bookmarkStore` | 书签 CRUD，按 bookId 过滤 |
 | `highlightStore` | 高亮 CRUD，支持备注 |
 | `progressStore` | 阅读位置保存/加载，按 bookId |
-| `compendiumStore` | 图鉴导入/加载/解锁/查看 |
+| `settingsStore` | 阅读器设置 + 图鉴字号，持久化到 localStorage |
+| `compendiumStore` | 图鉴导入/加载/解锁/搜索 |
 
 ### 设计系统
 
