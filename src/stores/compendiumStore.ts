@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { registry } from '../core/registry'
 import type { CompendiumEntry, CompendiumImportData } from '../core/types'
 
+export interface SearchResult {
+  entry: CompendiumEntry
+  score: number
+}
+
 interface CompendiumState {
   entries: CompendiumEntry[]
   currentChapter: number
@@ -16,11 +21,33 @@ interface CompendiumState {
   deleteEntry: (id: string) => Promise<void>
   getEntriesByCategory: (category: 'character' | 'location' | 'monster') => CompendiumEntry[]
   getEntryById: (id: string) => CompendiumEntry | undefined
+  searchEntries: (query: string, category?: 'character' | 'location' | 'monster') => SearchResult[]
 }
 
 function hasUnlockedContent(entry: CompendiumEntry): boolean {
   return entry.entries.some((r) => r.unlocked) ||
     entry.quotations.some((q) => q.unlocked !== false)
+}
+
+function scoreEntry(entry: CompendiumEntry, query: string): number {
+  const q = query.toLowerCase()
+  let score = 0
+
+  // 名字精确匹配
+  if (entry.name === query) { score += 100 }
+  // 名字模糊匹配
+  else if (entry.name.toLowerCase().includes(q)) { score += 50 }
+
+  // 别名匹配
+  for (const alias of entry.aliases) {
+    if (alias === query) { score += 60 }
+    else if (alias.toLowerCase().includes(q)) { score += 30 }
+  }
+
+  // 描述匹配
+  if (entry.description.toLowerCase().includes(q)) { score += 10 }
+
+  return score
 }
 
 export const useCompendiumStore = create<CompendiumState>((set, get) => ({
@@ -133,5 +160,19 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
 
   getEntryById: (id: string) => {
     return get().entries.find((e) => e.id === id)
+  },
+
+  searchEntries: (query: string, category?: 'character' | 'location' | 'monster') => {
+    const q = query.trim()
+    if (!q) return []
+    const results: SearchResult[] = []
+    for (const entry of get().entries) {
+      if (!hasUnlockedContent(entry)) continue
+      if (category && entry.category !== category) continue
+      const score = scoreEntry(entry, q)
+      if (score > 0) results.push({ entry, score })
+    }
+    results.sort((a, b) => b.score - a.score)
+    return results
   },
 }))
