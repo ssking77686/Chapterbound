@@ -1016,6 +1016,19 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             </div>
                           )
                         }
+                        if (searchQuery) {
+                          return (
+                            <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
+                              <Search
+                                className="h-7 w-7"
+                                style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}
+                              />
+                              <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                                未找到匹配条目
+                              </p>
+                            </div>
+                          )
+                        }
                         return (
                           <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
                             <ScrollText
