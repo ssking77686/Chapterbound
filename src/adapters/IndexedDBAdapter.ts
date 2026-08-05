@@ -31,6 +31,16 @@ class ReaderDB extends Dexie {
   }
 }
 
+// ── Helpers ─────────────────────────────────────────────────
+
+function dedupRelations(relations: { targetId: string; label: string }[]): { targetId: string; label: string }[] {
+  const seen = new Map<string, string>()
+  for (const r of relations) {
+    seen.set(r.targetId, r.label)
+  }
+  return Array.from(seen, ([targetId, label]) => ({ targetId, label }))
+}
+
 // ── Adapter Implementation ───────────────────────────────────
 
 export class IndexedDBAdapter implements IStorageAdapter {
@@ -148,6 +158,7 @@ export class IndexedDBAdapter implements IStorageAdapter {
       ...item,
       bookId,
       aliases: item.aliases ?? [],
+      relations: dedupRelations(item.relations),
       quotations: (item.quotations ?? []).map((q) => (
         q.chapter !== undefined ? { ...q, unlocked: false } : { ...q, unlocked: true }
       )),
