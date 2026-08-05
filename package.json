@@ -2,6 +2,7 @@
   "name": "-",
   "private": true,
   "version": "1.2.0",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -37,13 +38,16 @@
       "src-tauri/icons/icon.ico"
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "src-tauri/icons/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "unicode": true
+      "unicode": true,
+      "artifactName": "${productName}-v${version}.${ext}"
     }
   },
   "devDependencies": {
