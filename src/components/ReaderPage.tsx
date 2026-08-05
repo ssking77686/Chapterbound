@@ -5,10 +5,10 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download } from 'lucide-react'
+import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download, Search } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useCompendiumStore } from '../stores/compendiumStore'
+import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore'
 import type { TOCItem } from '../core/types'
 
 interface Props {
@@ -51,9 +51,12 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const getEntriesByCategory = useCompendiumStore((s) => s.getEntriesByCategory)
   const getEntryById = useCompendiumStore((s) => s.getEntryById)
   const [compendiumCategory, setCompendiumCategory] = useState<'character' | 'location' | 'monster'>('character')
+  const [compendiumSearch, setCompendiumSearch] = useState('')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const searchEntries = useCompendiumStore((s) => s.searchEntries)
   const [importMsg, setImportMsg] = useState('')
+  const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
+  const [selResults, setSelResults] = useState<SearchResult[] | null>(null)
 
   const [toc, setToc] = useState<TOCItem[]>([])
   const [sidebarTab, setSidebarTab] = useState<'toc' | 'bookmarks' | 'compendium' | 'settings' | null>(null)
@@ -61,6 +64,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [pageKey, setPageKey] = useState(0)
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [relationsExpanded, setRelationsExpanded] = useState(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnDirection = useRef(0)
   const pageInfoRef = useRef(pageInfo)
@@ -105,6 +109,30 @@ export function ReaderPage({ bookId, onBack }: Props) {
   useEffect(() => {
     getEngine()?.setTheme(isDark ? 'dark' : 'light')
   }, [isDark, pageInfo.total, getEngine])
+
+  // 监听选中文字事件，弹出检索按钮
+  useEffect(() => {
+    const engine = getEngine()
+    if (!engine || pageInfo.total === 0) return
+    const handler = (...args: unknown[]) => {
+      const text = (args[0] as string ?? '').trim()
+      if (text.length > 0) {
+        setSelData({ text, x: args[2] as number, y: args[3] as number })
+        setSelResults(null)
+      } else {
+        setSelData(null)
+        setSelResults(null)
+      }
+    }
+    engine.on('selection', handler)
+    return () => { engine.off('selection', handler) }
+  }, [getEngine, pageInfo.total])
+
+  // 翻页时关闭检索浮窗
+  useEffect(() => {
+    setSelData(null)
+    setSelResults(null)
+  }, [pageKey])
 
   const resetHideTimer = useCallback(() => {
     setToolbarVisible(true)
@@ -163,22 +191,24 @@ export function ReaderPage({ bookId, onBack }: Props) {
   }
 
   const handleImportJSON = useCallback(async () => {
-    const input = fileInputRef.current
-    if (!input) return
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
     input.onchange = async () => {
       const file = input.files?.[0]
-      if (!file) return
+      if (!file) { input.remove(); return }
       try {
         const text = await file.text()
         const json = JSON.parse(text)
         await compendiumImport(bookId, json, getCurrentChapter())
         setImportMsg('导入成功')
         setTimeout(() => setImportMsg(''), 2000)
-      } catch {
+      } catch (e) {
+        console.error('[import] failed:', e)
         setImportMsg('导入失败，请检查 JSON 格式')
         setTimeout(() => setImportMsg(''), 3000)
       }
-      input.value = ''
+      input.remove()
     }
     input.click()
   }, [bookId, compendiumImport, getCurrentChapter])
@@ -188,6 +218,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const handleShowEntryDetail = useCallback((id: string) => {
     setDetailEntryId(id)
     setSidebarTab(null)
+    setRelationsExpanded(false)
   }, [])
 
   const toolbarBg = 'var(--color-toolbar)'
@@ -366,8 +397,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           {(() => {
             const hasNew = compendiumEntries.some((e) =>
               e.updatedAt > compendiumLastViewedAt && (
-                e.entries.some((r) => r.unlocked) ||
-                e.quotations.some((q) => q.unlocked !== false)
+                (e.entries ?? []).some((r) => r.unlocked) ||
+                (e.quotations ?? []).some((q) => q.unlocked !== false)
               ),
             )
             return hasNew ? (
@@ -420,7 +451,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         {/* 阅读卡片 — 翻页滑入动效 */}
         <motion.div
           ref={cardScope}
-          className="relative mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
+          className="relative mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl min-[1800px]:max-w-[1600px]"
           style={{
             background: 'var(--color-card)',
             borderRadius: 'var(--radius-card)',
@@ -443,6 +474,94 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
         >
           <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
+
+          {/* 选中文字检索浮窗 */}
+          {selData && !selResults && (
+            <div
+              className="pointer-events-auto fixed z-30"
+              style={{ left: Math.max(16, selData.x), top: Math.max(8, selData.y - 44), transform: 'translateX(-50%)' }}
+            >
+              <motion.button
+                className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium shadow-lg"
+                style={{
+                  background: 'var(--color-card)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-separator)',
+                  whiteSpace: 'nowrap',
+                }}
+                initial={{ opacity: 0, y: 4, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={springPress}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const results = searchEntries(selData.text)
+                  if (results.length === 1) {
+                    handleShowEntryDetail(results[0].entry.id)
+                    setSelData(null)
+                  } else {
+                    setSelResults(results)
+                  }
+                }}
+              >
+                <ScrollText className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
+                <span className="max-w-[120px] truncate">{selData.text}</span>
+              </motion.button>
+            </div>
+          )}
+
+          {/* 检索结果浮窗 */}
+          {selResults && selData && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={(e) => { e.stopPropagation(); setSelData(null); setSelResults(null) }}
+              />
+              <div
+                className="fixed z-40 flex max-h-48 w-56 flex-col overflow-y-auto rounded-2xl p-1.5 shadow-xl"
+                style={{
+                  left: Math.min(selData.x, window.innerWidth - 240),
+                  top: Math.max(8, selData.y - 48 - Math.min(selResults.length * 56, 168)),
+                  background: 'var(--color-card)',
+                  border: '1px solid var(--color-separator)',
+                }}
+              >
+                {selResults.length === 0 ? (
+                  <p className="px-3 py-4 text-center text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                    未找到匹配条目
+                  </p>
+                ) : (
+                  selResults.map((r) => (
+                    <motion.button
+                      key={r.entry.id}
+                      className="flex flex-col items-start rounded-xl px-3 py-2.5 text-left"
+                      whileHover={{ background: 'var(--color-separator)' }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={springPress}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleShowEntryDetail(r.entry.id)
+                        setSelData(null)
+                        setSelResults(null)
+                      }}
+                    >
+                      <span className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                        {r.entry.name}
+                      </span>
+                      <span
+                        className="truncate text-xs"
+                        style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}
+                      >
+                        {r.entry.description}
+                      </span>
+                    </motion.button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+
           {/* 书签标记 — 右侧常驻 */}
           {bookmarks.length > 0 && (
             <div className="pointer-events-none absolute right-1.5 top-2 bottom-2 z-10 flex flex-col">
@@ -768,12 +887,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
               {/* 图鉴面板 */}
               {sidebarTab === 'compendium' && (
                 <div className="flex flex-col" style={{ height: 'calc(100% - 56px)' }}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                  />
                   {/* 分类切换 */}
                   <div className="flex gap-1 p-4 pb-2">
                     {([
@@ -792,17 +905,51 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         transition={springPress}
-                        onClick={() => setCompendiumCategory(cat.key)}
+                        onClick={() => { setCompendiumCategory(cat.key); setCompendiumSearch('') }}
                       >
                         <cat.icon className="h-3.5 w-3.5" />
                         {cat.label}
                       </motion.button>
                     ))}
                   </div>
+                  {/* 搜索栏 */}
+                  <div className="px-4 pb-2">
+                    <div
+                      className="flex items-center gap-2 rounded-xl px-3 py-2"
+                      style={{
+                        background: 'var(--color-card)',
+                        border: '1px solid var(--color-separator)',
+                      }}
+                    >
+                      <Search className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--color-text-secondary)' }} />
+                      <input
+                        type="text"
+                        placeholder={`搜索${compendiumCategory === 'character' ? '人物' : compendiumCategory === 'location' ? '地点' : '怪物'}...`}
+                        value={compendiumSearch}
+                        onChange={(e) => setCompendiumSearch(e.target.value)}
+                        className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                        style={{ color: 'var(--color-text)' }}
+                      />
+                      {compendiumSearch && (
+                        <motion.button
+                          className="flex-shrink-0 rounded-full p-0.5"
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setCompendiumSearch('')}
+                          aria-label="清除搜索"
+                        >
+                          <X className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+                        </motion.button>
+                      )}
+                    </div>
+                  </div>
                   {/* 条目列表 */}
                   <div className="flex-1 overflow-y-auto px-4 pb-4">
                     {(() => {
-                      const filtered = getEntriesByCategory(compendiumCategory)
+                      const searchQuery = compendiumSearch.trim()
+                      const filtered = searchQuery
+                        ? searchEntries(searchQuery, compendiumCategory)
+                        : getEntriesByCategory(compendiumCategory).map((e) => ({ entry: e, score: 0 }))
                       if (filtered.length === 0) {
                         const totalImported = compendiumEntries.filter((e) => e.category === compendiumCategory).length
                         if (totalImported === 0) {
@@ -868,6 +1015,19 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             </div>
                           )
                         }
+                        if (searchQuery) {
+                          return (
+                            <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
+                              <Search
+                                className="h-7 w-7"
+                                style={{ color: 'var(--color-text-secondary)', opacity: 0.4 }}
+                              />
+                              <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                                未找到匹配条目
+                              </p>
+                            </div>
+                          )
+                        }
                         return (
                           <div className="mt-8 flex flex-col items-center gap-3 px-2 text-center">
                             <ScrollText
@@ -883,9 +1043,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           </div>
                         )
                       }
-                      return filtered.map((entry, i) => {
-                        const unlockedCount = entry.entries.filter((r) => r.unlocked).length
-                        const totalCount = entry.entries.length
+                      return filtered.map(({ entry }, i) => {
+                        const unlockedCount = (entry.entries ?? []).filter((r) => r.unlocked).length
+                        const totalCount = (entry.entries ?? []).length
                         return (
                           <motion.button
                             key={entry.id}
@@ -915,13 +1075,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p
-                                className="truncate text-sm font-medium"
+                                className="truncate text-[0.9375rem] font-medium"
                                 style={{ color: 'var(--color-text)' }}
                               >
                                 {entry.name}
                               </p>
                               <p
-                                className="truncate text-xs"
+                                className="truncate text-[0.8125rem]"
                                 style={{ color: 'var(--color-text-secondary)' }}
                               >
                                 {entry.description}
@@ -1112,13 +1272,14 @@ export function ReaderPage({ bookId, onBack }: Props) {
             transition={springSlide}
           >
             {/* 返回按钮 */}
-            <div className="sticky top-0 z-10 flex items-center gap-3 px-3 py-2"
+            <div className="sticky top-0 z-10 py-2"
               style={{
                 background: 'rgba(60, 46, 36, 0.85)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
               }}
             >
+              <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-3">
               <motion.button
                 className="rounded-full p-2"
                 whileHover={{ scale: 1.08 }}
@@ -1133,6 +1294,55 @@ export function ReaderPage({ bookId, onBack }: Props) {
               <span className="text-sm font-medium" style={{ color: 'var(--comp-text-secondary)' }}>
                 图鉴
               </span>
+              <div className="ml-3 flex items-center gap-1">
+                {(() => {
+                  const scales = [0.85, 1.0, 1.15, 1.3]
+                  const current = settings.compendiumFontScale
+                  const idx = scales.indexOf(current)
+                  const prev = idx > 0 ? scales[idx - 1] : null
+                  const next = idx < scales.length - 1 ? scales[idx + 1] : null
+                  return (
+                    <div
+                      className="flex items-center rounded-full px-0.5 py-0.5"
+                      style={{ background: 'var(--comp-separator)' }}
+                    >
+                      <motion.button
+                        className="flex h-6 w-6 items-center justify-center rounded-full"
+                        whileTap={{ scale: 0.88 }}
+                        transition={springPress}
+                        style={{ color: prev != null ? 'var(--comp-text-secondary)' : 'var(--comp-blur-text)' }}
+                        disabled={prev == null}
+                        onClick={() => prev != null && updateSettings({ compendiumFontScale: prev })}
+                        aria-label="缩小字号"
+                      >
+                        <span className="text-[0.625rem] font-semibold leading-none">A</span>
+                      </motion.button>
+                      <div className="flex items-center gap-[3px] px-2">
+                        {scales.map((_, i) => (
+                          <div
+                            key={i}
+                            className="h-[3px] w-[3px] rounded-full transition-colors duration-200"
+                            style={{
+                              background: i <= idx ? 'var(--comp-accent)' : 'var(--comp-blur-text)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <motion.button
+                        className="flex h-6 w-6 items-center justify-center rounded-full"
+                        whileTap={{ scale: 0.88 }}
+                        transition={springPress}
+                        style={{ color: next != null ? 'var(--comp-text-secondary)' : 'var(--comp-blur-text)' }}
+                        disabled={next == null}
+                        onClick={() => next != null && updateSettings({ compendiumFontScale: next })}
+                        aria-label="放大字号"
+                      >
+                        <span className="text-[0.8125rem] font-semibold leading-none">A</span>
+                      </motion.button>
+                    </div>
+                  )
+                })()}
+              </div>
               <div className="flex-1" />
               <motion.button
                 className="rounded-full p-2"
@@ -1145,29 +1355,32 @@ export function ReaderPage({ bookId, onBack }: Props) {
               >
                 <X className="h-5 w-5" />
               </motion.button>
+              </div>
             </div>
 
             {/* 肖像图 */}
             {detailEntry.image ? (
-              <div className="relative w-full" style={{ aspectRatio: '16/10', maxHeight: '40vh' }}>
-                <img
-                  src={detailEntry.image}
-                  alt={detailEntry.name}
-                  className="h-full w-full object-cover"
-                />
-                <div
-                  className="absolute inset-x-0 bottom-0"
-                  style={{
-                    height: '40%',
-                    background: 'linear-gradient(to top, var(--comp-bg), transparent)',
-                  }}
-                />
+              <div className="mx-auto w-full max-w-2xl">
+                <div className="relative w-full" style={{ aspectRatio: '16/10', maxHeight: '40vh' }}>
+                  <img
+                    src={detailEntry.image}
+                    alt={detailEntry.name}
+                    className="h-full w-full object-cover"
+                  />
+                  <div
+                    className="absolute inset-x-0 bottom-0"
+                    style={{
+                      height: '40%',
+                      background: 'linear-gradient(to top, var(--comp-bg), transparent)',
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="h-6" />
             )}
 
-            <div className="px-5 pb-10">
+            <div className="mx-auto w-full max-w-2xl px-5 pb-10 min-[1800px]:max-w-[1300px]" style={{ zoom: settings.compendiumFontScale }}>
               {/* 名字 */}
               <h1
                 className="text-2xl font-bold tracking-tight"
@@ -1199,23 +1412,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
               {/* 描述 */}
               <p
-                className="mt-4 text-sm leading-relaxed"
+                className="mt-4 text-[0.9375rem] leading-[1.7]"
                 style={{ color: 'var(--comp-text)' }}
               >
                 {detailEntry.description}
               </p>
 
+              {/* 双栏区域：历史+关联 | 引述+日志 */}
+              <div className="min-[1800px]:grid min-[1800px]:grid-cols-2 min-[1800px]:gap-10 min-[1800px]:mt-5">
+                <div>
               {/* 历史 */}
               {detailEntry.history && (
-                <div className="mt-5">
+                <div className="mt-5 min-[1800px]:mt-0">
                   <h3
-                    className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     历史
                   </h3>
                   <p
-                    className="text-sm leading-relaxed"
+                    className="text-[0.9375rem] leading-[1.7]"
                     style={{ color: 'var(--comp-text)' }}
                   >
                     {detailEntry.history}
@@ -1227,66 +1443,114 @@ export function ReaderPage({ bookId, onBack }: Props) {
               {detailEntry.relations.length > 0 && (
                 <div className="mt-6">
                   <h3
-                    className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     相关{detailEntry.category === 'character' ? '人物' : detailEntry.category === 'location' ? '地点' : '怪物'}
                   </h3>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {detailEntry.relations.map((rel) => {
-                      const target = getEntryById(rel.targetId)
+                  <div className="flex flex-wrap gap-1.5">
+                    {(() => {
+                      const globalRefCount = new Map<string, number>()
+                      for (const e of compendiumEntries) {
+                        for (const r of e.relations) {
+                          globalRefCount.set(r.targetId, (globalRefCount.get(r.targetId) ?? 0) + 1)
+                        }
+                      }
+                      const sorted = [...detailEntry.relations].sort((a, b) => {
+                        const aTarget = getEntryById(a.targetId)
+                        const bTarget = getEntryById(b.targetId)
+                        const aScore = (aTarget?.entries.length ?? 0) + (globalRefCount.get(a.targetId) ?? 0)
+                        const bScore = (bTarget?.entries.length ?? 0) + (globalRefCount.get(b.targetId) ?? 0)
+                        return bScore - aScore
+                      })
+                      const MAX_VISIBLE = 8
+                      const visible = relationsExpanded ? sorted : sorted.slice(0, MAX_VISIBLE)
+                      const hiddenCount = sorted.length - MAX_VISIBLE
                       return (
-                        <motion.button
-                          key={rel.targetId}
-                          className="flex-shrink-0 rounded-xl px-3 py-2 text-left"
-                          style={{
-                            background: 'var(--comp-card)',
-                            border: target ? '1px solid var(--comp-separator)' : 'none',
-                          }}
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
-                          transition={springPress}
-                          onClick={() => {
-                            if (target) setDetailEntryId(target.id)
-                          }}
-                          disabled={!target}
-                        >
-                          <p className="text-sm font-medium" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
-                            {target?.name ?? rel.targetId}
-                          </p>
-                          <p className="text-xs" style={{ color: 'var(--comp-accent)' }}>
-                            {rel.label}
-                          </p>
-                        </motion.button>
+                        <>
+                          {visible.map((rel) => {
+                            const target = getEntryById(rel.targetId)
+                            return (
+                              <motion.button
+                                key={rel.targetId}
+                                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-left"
+                                style={{
+                                  background: 'var(--comp-card)',
+                                  border: target ? '1px solid var(--comp-separator)' : 'none',
+                                }}
+                                whileHover={{ y: -1, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                                whileTap={{ scale: 0.96 }}
+                                transition={springPress}
+                                onClick={() => {
+                                  if (target) handleShowEntryDetail(target.id)
+                                }}
+                                disabled={!target}
+                              >
+                                <span className="text-[0.8125rem] font-medium max-w-[120px] truncate" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
+                                  {target?.name ?? rel.targetId}
+                                </span>
+                                <span className="text-[0.6875rem] opacity-60" style={{ color: 'var(--comp-accent)' }}>
+                                  {rel.label}
+                                </span>
+                              </motion.button>
+                            )
+                          })}
+                          {!relationsExpanded && hiddenCount > 0 && (
+                            <motion.button
+                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-[0.8125rem]"
+                              style={{ color: 'var(--comp-accent)', border: '1px dashed var(--comp-separator)' }}
+                              whileHover={{ background: 'var(--comp-separator)' }}
+                              whileTap={{ scale: 0.96 }}
+                              transition={springPress}
+                              onClick={() => setRelationsExpanded(true)}
+                            >
+                              展开全部 ({hiddenCount})
+                            </motion.button>
+                          )}
+                          {relationsExpanded && hiddenCount > 0 && (
+                            <motion.button
+                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-[0.8125rem]"
+                              style={{ color: 'var(--comp-text-secondary)', border: '1px dashed var(--comp-separator)' }}
+                              whileHover={{ background: 'var(--comp-separator)' }}
+                              whileTap={{ scale: 0.96 }}
+                              transition={springPress}
+                              onClick={() => setRelationsExpanded(false)}
+                            >
+                              收起
+                            </motion.button>
+                          )}
+                        </>
                       )
-                    })}
+                    })()}
                   </div>
                 </div>
               )}
+                </div>
+                <div>
 
               {/* 文献引述 */}
-              {detailEntry.quotations.length > 0 && (
-                <div className="mt-6">
+              {(detailEntry.quotations ?? []).length > 0 && (
+                <div className="mt-6 min-[1800px]:mt-0">
                   <h3
-                    className="mb-3 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     文献引述
                   </h3>
-                  <div className="flex flex-col gap-4">
-                    {detailEntry.quotations.map((q, i) => (
+                  <div className="flex flex-col gap-5">
+                    {(detailEntry.quotations ?? []).map((q, i) => (
                       <div
                         key={i}
                         className="relative"
                         style={{
-                          paddingLeft: 14,
+                          paddingLeft: 16,
                           borderLeft: '2px solid var(--comp-separator)',
                           filter: q.unlocked !== false ? 'none' : 'blur(2px)',
                           userSelect: q.unlocked !== false ? 'text' : 'none',
                         }}
                       >
                         <p
-                          className="text-sm leading-relaxed"
+                          className="text-[0.9375rem] leading-[1.7]"
                           style={{
                             color: q.unlocked !== false ? 'var(--comp-text)' : 'var(--comp-blur-text)',
                             fontStyle: 'italic',
@@ -1296,7 +1560,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           {q.unlocked !== false ? q.text : '继续阅读以解锁此引述……'}
                         </p>
                         <p
-                          className="mt-1.5 text-right text-xs"
+                          className="mt-2 text-right text-[0.8125rem] font-medium"
                           style={{ color: 'var(--comp-text-secondary)' }}
                         >
                           {q.unlocked !== false ? q.attribution : '——？？？'}
@@ -1308,23 +1572,22 @@ export function ReaderPage({ bookId, onBack }: Props) {
               )}
 
               {/* 发现日志 */}
-              {detailEntry.entries.length > 0 && (
-                <div className="mt-6">
+              {(detailEntry.entries ?? []).length > 0 && (
+                <div className="mt-6 min-[1800px]:mt-6">
                   <h3
-                    className="mb-3 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     发现日志
                   </h3>
                   <div className="relative pl-5" style={{ borderLeft: '1px solid var(--comp-separator)' }}>
-                    {detailEntry.entries.map((rev, i) => {
+                    {(detailEntry.entries ?? []).map((rev, i) => {
                       const isLatestUnlocked = rev.unlocked &&
                         rev.chapter === useCompendiumStore.getState().currentChapter
                       return (
-                        <div key={i} className="relative mb-4 last:mb-0">
-                          {/* 时间线圆点 */}
+                        <div key={i} className="relative mb-5 last:mb-0">
                           <div
-                            className="absolute -left-[21px] top-0.5 h-2.5 w-2.5 rounded-full border-2"
+                            className="absolute -left-[22px] top-[3px] h-2.5 w-2.5 rounded-full border-2"
                             style={{
                               background: rev.unlocked ? 'var(--comp-accent)' : 'transparent',
                               borderColor: rev.unlocked ? 'var(--comp-accent)' : 'var(--comp-blur-text)',
@@ -1332,13 +1595,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             }}
                           />
                           <span
-                            className="text-xs font-medium"
+                            className="text-[0.8125rem] font-semibold"
                             style={{ color: rev.unlocked ? 'var(--comp-accent)' : 'var(--comp-blur-text)' }}
                           >
                             第 {rev.chapter} 章
                           </span>
                           <p
-                            className="mt-0.5 text-sm leading-relaxed"
+                            className="mt-1 text-[0.9375rem] leading-[1.7]"
                             style={{
                               color: rev.unlocked ? 'var(--comp-text)' : 'var(--comp-blur-text)',
                               filter: rev.unlocked ? 'none' : 'blur(2px)',
@@ -1353,6 +1616,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   </div>
                 </div>
               )}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}

@@ -13,9 +13,11 @@ export class EpubEngine implements IReaderEngine {
 
   private book: Book | null = null
   private rendition: Rendition | null = null
+  private containerEl: HTMLElement | null = null
   private listeners = new Map<string, Set<EventCallback>>()
 
   async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
+    this.containerEl = container
     this.book = Epub(data) as Book
 
     const rect = container.getBoundingClientRect()
@@ -40,8 +42,22 @@ export class EpubEngine implements IReaderEngine {
     })
 
     this.rendition.on('selected', (cfiRange: string, contents: { window: { getSelection: () => Selection } }) => {
-      const text = contents.window.getSelection()?.toString() ?? ''
-      this.emit('selection', text, cfiRange)
+      const selection = contents.window.getSelection()
+      const text = selection?.toString() ?? ''
+      let selX = 0, selY = 0
+      try {
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0)
+          const rect = range.getBoundingClientRect()
+          const iframe = this.containerEl?.querySelector('iframe')
+          if (iframe && rect.width > 0) {
+            const iframeRect = iframe.getBoundingClientRect()
+            selX = rect.left + iframeRect.left + rect.width / 2
+            selY = rect.top + iframeRect.top
+          }
+        }
+      } catch { /* 选区坐标获取失败不影响选字功能 */ }
+      this.emit('selection', text, cfiRange, selX, selY)
     })
 
     await this.book.ready
@@ -63,6 +79,7 @@ export class EpubEngine implements IReaderEngine {
     this.book?.destroy()
     this.book = null
     this.rendition = null
+    this.containerEl = null
     this.listeners.clear()
   }
 

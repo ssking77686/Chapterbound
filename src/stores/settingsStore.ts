@@ -4,6 +4,7 @@ export interface ReaderSettings {
   fontSize: number
   fontFamily: string
   lineHeight: number
+  compendiumFontScale: number
 }
 
 const STORAGE_KEY = 'ereader-settings'
@@ -12,6 +13,7 @@ const defaults: ReaderSettings = {
   fontSize: 16,
   fontFamily: '',
   lineHeight: 1.8,
+  compendiumFontScale: 1.0,
 }
 
 function load(): ReaderSettings {
