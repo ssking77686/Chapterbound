@@ -451,7 +451,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         {/* 阅读卡片 — 翻页滑入动效 */}
         <motion.div
           ref={cardScope}
-          className="relative mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
+          className="relative mx-auto h-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl min-[1800px]:max-w-[1600px]"
           style={{
             background: 'var(--color-card)',
             borderRadius: 'var(--radius-card)',
@@ -1075,13 +1075,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p
-                                className="truncate text-sm font-medium"
+                                className="truncate text-[0.9375rem] font-medium"
                                 style={{ color: 'var(--color-text)' }}
                               >
                                 {entry.name}
                               </p>
                               <p
-                                className="truncate text-xs"
+                                className="truncate text-[0.8125rem]"
                                 style={{ color: 'var(--color-text-secondary)' }}
                               >
                                 {entry.description}
@@ -1272,13 +1272,14 @@ export function ReaderPage({ bookId, onBack }: Props) {
             transition={springSlide}
           >
             {/* 返回按钮 */}
-            <div className="sticky top-0 z-10 flex items-center gap-3 px-3 py-2"
+            <div className="sticky top-0 z-10 py-2"
               style={{
                 background: 'rgba(60, 46, 36, 0.85)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
               }}
             >
+              <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-3">
               <motion.button
                 className="rounded-full p-2"
                 whileHover={{ scale: 1.08 }}
@@ -1293,6 +1294,55 @@ export function ReaderPage({ bookId, onBack }: Props) {
               <span className="text-sm font-medium" style={{ color: 'var(--comp-text-secondary)' }}>
                 图鉴
               </span>
+              <div className="ml-3 flex items-center gap-1">
+                {(() => {
+                  const scales = [0.85, 1.0, 1.15, 1.3]
+                  const current = settings.compendiumFontScale
+                  const idx = scales.indexOf(current)
+                  const prev = idx > 0 ? scales[idx - 1] : null
+                  const next = idx < scales.length - 1 ? scales[idx + 1] : null
+                  return (
+                    <div
+                      className="flex items-center rounded-full px-0.5 py-0.5"
+                      style={{ background: 'var(--comp-separator)' }}
+                    >
+                      <motion.button
+                        className="flex h-6 w-6 items-center justify-center rounded-full"
+                        whileTap={{ scale: 0.88 }}
+                        transition={springPress}
+                        style={{ color: prev != null ? 'var(--comp-text-secondary)' : 'var(--comp-blur-text)' }}
+                        disabled={prev == null}
+                        onClick={() => prev != null && updateSettings({ compendiumFontScale: prev })}
+                        aria-label="缩小字号"
+                      >
+                        <span className="text-[0.625rem] font-semibold leading-none">A</span>
+                      </motion.button>
+                      <div className="flex items-center gap-[3px] px-2">
+                        {scales.map((_, i) => (
+                          <div
+                            key={i}
+                            className="h-[3px] w-[3px] rounded-full transition-colors duration-200"
+                            style={{
+                              background: i <= idx ? 'var(--comp-accent)' : 'var(--comp-blur-text)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <motion.button
+                        className="flex h-6 w-6 items-center justify-center rounded-full"
+                        whileTap={{ scale: 0.88 }}
+                        transition={springPress}
+                        style={{ color: next != null ? 'var(--comp-text-secondary)' : 'var(--comp-blur-text)' }}
+                        disabled={next == null}
+                        onClick={() => next != null && updateSettings({ compendiumFontScale: next })}
+                        aria-label="放大字号"
+                      >
+                        <span className="text-[0.8125rem] font-semibold leading-none">A</span>
+                      </motion.button>
+                    </div>
+                  )
+                })()}
+              </div>
               <div className="flex-1" />
               <motion.button
                 className="rounded-full p-2"
@@ -1305,29 +1355,32 @@ export function ReaderPage({ bookId, onBack }: Props) {
               >
                 <X className="h-5 w-5" />
               </motion.button>
+              </div>
             </div>
 
             {/* 肖像图 */}
             {detailEntry.image ? (
-              <div className="relative w-full" style={{ aspectRatio: '16/10', maxHeight: '40vh' }}>
-                <img
-                  src={detailEntry.image}
-                  alt={detailEntry.name}
-                  className="h-full w-full object-cover"
-                />
-                <div
-                  className="absolute inset-x-0 bottom-0"
-                  style={{
-                    height: '40%',
-                    background: 'linear-gradient(to top, var(--comp-bg), transparent)',
-                  }}
-                />
+              <div className="mx-auto w-full max-w-2xl">
+                <div className="relative w-full" style={{ aspectRatio: '16/10', maxHeight: '40vh' }}>
+                  <img
+                    src={detailEntry.image}
+                    alt={detailEntry.name}
+                    className="h-full w-full object-cover"
+                  />
+                  <div
+                    className="absolute inset-x-0 bottom-0"
+                    style={{
+                      height: '40%',
+                      background: 'linear-gradient(to top, var(--comp-bg), transparent)',
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="h-6" />
             )}
 
-            <div className="px-5 pb-10">
+            <div className="mx-auto w-full max-w-2xl px-5 pb-10 min-[1800px]:max-w-[1300px]" style={{ zoom: settings.compendiumFontScale }}>
               {/* 名字 */}
               <h1
                 className="text-2xl font-bold tracking-tight"
@@ -1359,23 +1412,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
               {/* 描述 */}
               <p
-                className="mt-4 text-sm leading-relaxed"
+                className="mt-4 text-[0.9375rem] leading-[1.7]"
                 style={{ color: 'var(--comp-text)' }}
               >
                 {detailEntry.description}
               </p>
 
+              {/* 双栏区域：历史+关联 | 引述+日志 */}
+              <div className="min-[1800px]:grid min-[1800px]:grid-cols-2 min-[1800px]:gap-10 min-[1800px]:mt-5">
+                <div>
               {/* 历史 */}
               {detailEntry.history && (
-                <div className="mt-5">
+                <div className="mt-5 min-[1800px]:mt-0">
                   <h3
-                    className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     历史
                   </h3>
                   <p
-                    className="text-sm leading-relaxed"
+                    className="text-[0.9375rem] leading-[1.7]"
                     style={{ color: 'var(--comp-text)' }}
                   >
                     {detailEntry.history}
@@ -1387,7 +1443,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
               {detailEntry.relations.length > 0 && (
                 <div className="mt-6">
                   <h3
-                    className="mb-2 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     相关{detailEntry.category === 'character' ? '人物' : detailEntry.category === 'location' ? '地点' : '怪物'}
@@ -1430,10 +1486,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
                                 }}
                                 disabled={!target}
                               >
-                                <span className="text-xs font-medium max-w-[120px] truncate" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
+                                <span className="text-[0.8125rem] font-medium max-w-[120px] truncate" style={{ color: target ? 'var(--comp-text)' : 'var(--comp-blur-text)' }}>
                                   {target?.name ?? rel.targetId}
                                 </span>
-                                <span className="text-[10px] opacity-60" style={{ color: 'var(--comp-accent)' }}>
+                                <span className="text-[0.6875rem] opacity-60" style={{ color: 'var(--comp-accent)' }}>
                                   {rel.label}
                                 </span>
                               </motion.button>
@@ -1441,7 +1497,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           })}
                           {!relationsExpanded && hiddenCount > 0 && (
                             <motion.button
-                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs"
+                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-[0.8125rem]"
                               style={{ color: 'var(--comp-accent)', border: '1px dashed var(--comp-separator)' }}
                               whileHover={{ background: 'var(--comp-separator)' }}
                               whileTap={{ scale: 0.96 }}
@@ -1453,7 +1509,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           )}
                           {relationsExpanded && hiddenCount > 0 && (
                             <motion.button
-                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs"
+                              className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-[0.8125rem]"
                               style={{ color: 'var(--comp-text-secondary)', border: '1px dashed var(--comp-separator)' }}
                               whileHover={{ background: 'var(--comp-separator)' }}
                               whileTap={{ scale: 0.96 }}
@@ -1469,30 +1525,32 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   </div>
                 </div>
               )}
+                </div>
+                <div>
 
               {/* 文献引述 */}
               {(detailEntry.quotations ?? []).length > 0 && (
-                <div className="mt-6">
+                <div className="mt-6 min-[1800px]:mt-0">
                   <h3
-                    className="mb-3 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     文献引述
                   </h3>
-                  <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-5">
                     {(detailEntry.quotations ?? []).map((q, i) => (
                       <div
                         key={i}
                         className="relative"
                         style={{
-                          paddingLeft: 14,
+                          paddingLeft: 16,
                           borderLeft: '2px solid var(--comp-separator)',
                           filter: q.unlocked !== false ? 'none' : 'blur(2px)',
                           userSelect: q.unlocked !== false ? 'text' : 'none',
                         }}
                       >
                         <p
-                          className="text-sm leading-relaxed"
+                          className="text-[0.9375rem] leading-[1.7]"
                           style={{
                             color: q.unlocked !== false ? 'var(--comp-text)' : 'var(--comp-blur-text)',
                             fontStyle: 'italic',
@@ -1502,7 +1560,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           {q.unlocked !== false ? q.text : '继续阅读以解锁此引述……'}
                         </p>
                         <p
-                          className="mt-1.5 text-right text-xs"
+                          className="mt-2 text-right text-[0.8125rem] font-medium"
                           style={{ color: 'var(--comp-text-secondary)' }}
                         >
                           {q.unlocked !== false ? q.attribution : '——？？？'}
@@ -1515,9 +1573,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
               {/* 发现日志 */}
               {(detailEntry.entries ?? []).length > 0 && (
-                <div className="mt-6">
+                <div className="mt-6 min-[1800px]:mt-6">
                   <h3
-                    className="mb-3 text-xs font-semibold uppercase tracking-wider"
+                    className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider"
                     style={{ color: 'var(--comp-text-secondary)' }}
                   >
                     发现日志
@@ -1527,10 +1585,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       const isLatestUnlocked = rev.unlocked &&
                         rev.chapter === useCompendiumStore.getState().currentChapter
                       return (
-                        <div key={i} className="relative mb-4 last:mb-0">
-                          {/* 时间线圆点 */}
+                        <div key={i} className="relative mb-5 last:mb-0">
                           <div
-                            className="absolute -left-[21px] top-0.5 h-2.5 w-2.5 rounded-full border-2"
+                            className="absolute -left-[22px] top-[3px] h-2.5 w-2.5 rounded-full border-2"
                             style={{
                               background: rev.unlocked ? 'var(--comp-accent)' : 'transparent',
                               borderColor: rev.unlocked ? 'var(--comp-accent)' : 'var(--comp-blur-text)',
@@ -1538,13 +1595,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             }}
                           />
                           <span
-                            className="text-xs font-medium"
+                            className="text-[0.8125rem] font-semibold"
                             style={{ color: rev.unlocked ? 'var(--comp-accent)' : 'var(--comp-blur-text)' }}
                           >
                             第 {rev.chapter} 章
                           </span>
                           <p
-                            className="mt-0.5 text-sm leading-relaxed"
+                            className="mt-1 text-[0.9375rem] leading-[1.7]"
                             style={{
                               color: rev.unlocked ? 'var(--comp-text)' : 'var(--comp-blur-text)',
                               filter: rev.unlocked ? 'none' : 'blur(2px)',
@@ -1559,6 +1616,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   </div>
                 </div>
               )}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
