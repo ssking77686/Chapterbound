@@ -475,7 +475,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
         >
           {/* 阅读进度条 */}
-          {pageInfo.total > 0 && (
+          {settings.showProgressBar && pageInfo.total > 0 && (
             <div
               className="absolute top-0 left-0 right-0 z-10"
               style={{ height: 3, background: 'var(--color-separator)', borderRadius: 'var(--radius-card) var(--radius-card) 0 0' }}
@@ -1273,6 +1273,34 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         </motion.button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* 进度条开关 */}
+                  <div className="flex items-center justify-between">
+                    <p
+                      className="text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      阅读进度条
+                    </p>
+                    <motion.button
+                      className="relative flex h-7 w-11 items-center rounded-full"
+                      style={{
+                        background: settings.showProgressBar ? 'var(--color-accent)' : 'var(--color-separator)',
+                      }}
+                      whileTap={{ scale: 0.94 }}
+                      transition={springPress}
+                      onClick={() => handleSettingsChange({ showProgressBar: !settings.showProgressBar })}
+                      role="switch"
+                      aria-checked={settings.showProgressBar}
+                      aria-label="阅读进度条"
+                    >
+                      <motion.div
+                        className="h-5 w-5 rounded-full bg-white shadow-sm"
+                        animate={{ x: settings.showProgressBar ? 20 : 3 }}
+                        transition={{ type: 'spring' as const, bounce: 0, duration: 0.25 }}
+                      />
+                    </motion.button>
                   </div>
                 </div>
               )}
