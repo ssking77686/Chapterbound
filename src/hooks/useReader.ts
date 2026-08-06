@@ -62,6 +62,7 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
         const settings = useSettingsStore.getState().settings
         engine.applySettings(settings)
         engine.setPageColors(settings.pageTheme)
+        engine.setColumnMode(settings.columnMode)
 
         chapterMapRef.current = await engine.getChapterMap()
         useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})

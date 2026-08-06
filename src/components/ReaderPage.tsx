@@ -113,6 +113,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
     getEngine()?.setPageColors(pageTheme)
   }, [pageTheme, pageInfo.total, getEngine])
 
+  // 页面数量（单页/自动）变化时更新引擎
+  useEffect(() => {
+    getEngine()?.setColumnMode(settings.columnMode)
+  }, [settings.columnMode, getEngine])
+
   // 监听选中文字事件，弹出检索按钮
   useEffect(() => {
     const engine = getEngine()
@@ -459,6 +464,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             background: 'var(--color-card)',
             borderRadius: 'var(--radius-card)',
             boxShadow: 'var(--shadow-card)',
+            ...(settings.pageWidth > 0 ? { maxWidth: settings.pageWidth } : {}),
           }}
           onMouseMove={(e) => {
             resetHideTimer()
@@ -1319,6 +1325,81 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           </motion.button>
                         )
                       })}
+                    </div>
+                  </div>
+
+                  {/* 页面布局 */}
+                  <div>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      页面布局
+                    </p>
+
+                    {/* 宽度档位 — 分段控制器 */}
+                    <div
+                      className="relative flex rounded-lg p-0.5"
+                      style={{ background: 'var(--color-separator)' }}
+                    >
+                      {([
+                        { label: '紧凑', value: 600 },
+                        { label: '标准', value: 800 },
+                        { label: '宽阔', value: 1100 },
+                        { label: '自适应', value: 0 },
+                      ] as const).map((opt) => {
+                        const active = settings.pageWidth === opt.value
+                        return (
+                          <motion.button
+                            key={opt.value}
+                            className="relative flex-1 rounded-md py-2 text-sm font-medium"
+                            style={{ color: active ? 'var(--color-text)' : 'var(--color-text-secondary)' }}
+                            whileTap={{ scale: 0.96 }}
+                            transition={springPress}
+                            onClick={() => handleSettingsChange({ pageWidth: opt.value })}
+                          >
+                            {active && (
+                              <motion.div
+                                layoutId="page-width-indicator"
+                                className="absolute inset-1 rounded-sm"
+                                style={{ background: 'var(--color-card)', boxShadow: 'var(--shadow-card)' }}
+                                transition={springDefault}
+                              />
+                            )}
+                            <span className="relative z-10">{opt.label}</span>
+                          </motion.button>
+                        )
+                      })}
+                    </div>
+
+                    {/* 单页模式 — toggle */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <p
+                        className="text-xs font-medium tracking-[0.005em]"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        单页模式
+                      </p>
+                      <motion.button
+                        className="relative flex h-7 w-11 items-center rounded-full"
+                        style={{
+                          background: settings.columnMode === 'single' ? 'var(--color-accent)' : 'var(--color-separator)',
+                        }}
+                        whileTap={{ scale: 0.94 }}
+                        transition={springPress}
+                        onClick={() => handleSettingsChange({
+                          columnMode: settings.columnMode === 'single' ? 'auto' : 'single',
+                        })}
+                        role="switch"
+                        aria-checked={settings.columnMode === 'single'}
+                        aria-label="单页模式"
+                      >
+                        <motion.div
+                          className="h-5 w-5 rounded-full bg-white shadow-sm"
+                          animate={{ x: settings.columnMode === 'single' ? 20 : 3 }}
+                          transition={{ type: 'spring' as const, bounce: 0, duration: 0.25 }}
+                        />
+                      </motion.button>
                     </div>
                   </div>
 
