@@ -31,7 +31,17 @@ const defaults: ReaderSettings = {
 function load(): ReaderSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { ...defaults, ...JSON.parse(raw) }
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      // 迁移：旧版本没有 pageTheme，用 ereader-theme 来定初始值
+      if (!parsed.pageTheme) {
+        const oldTheme = localStorage.getItem('ereader-theme')
+        if (oldTheme === 'dark') {
+          parsed.pageTheme = { background: '#2B2420', text: '#F5EFE6' }
+        }
+      }
+      return { ...defaults, ...parsed }
+    }
   } catch { /* ignore */ }
   return { ...defaults }
 }
