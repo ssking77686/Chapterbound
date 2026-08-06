@@ -10,6 +10,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore'
 import type { TOCItem } from '../core/types'
+import { PAGE_THEME_PRESETS, findPreset } from '../data/themes'
 
 interface Props {
   bookId: string
@@ -106,10 +107,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
     )
   }, [pageKey])
 
-  // 暗夜模式切换时更新 iframe 内文字颜色
+  // 页面主题变化时更新 iframe 内文字颜色
+  const pageTheme = settings.pageTheme
   useEffect(() => {
-    getEngine()?.setTheme(isDark ? 'dark' : 'light')
-  }, [isDark, pageInfo.total, getEngine])
+    getEngine()?.setPageColors(pageTheme)
+  }, [pageTheme, pageInfo.total, getEngine])
 
   // 监听选中文字事件，弹出检索按钮
   useEffect(() => {
