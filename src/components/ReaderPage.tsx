@@ -39,6 +39,7 @@ const sidebarTabs = [
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, applySettings, error } = useReader(bookId, containerRef)
+  const readProgress = pageInfo.total > 0 ? Math.round((pageInfo.current / pageInfo.total) * 100) : 0
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
