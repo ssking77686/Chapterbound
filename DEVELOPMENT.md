@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="./README.md">← 返回用户文档</a> | <a href="./README_EN.md">← Back to English README</a>
+  <a href="./README.md">← 返回用户文档</a> | <a href="./README_EN.md">← Back to English README</a> | <a href="./DEVELOPMENT_EN.md">English Version</a>
 </p>
 
 # 开发者文档
