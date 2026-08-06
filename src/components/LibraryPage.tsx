@@ -29,7 +29,7 @@ export function LibraryPage({ onOpenBook }: Props) {
 
   // Auto-close AboutOverlay when onboarding moves past repo link step
   useEffect(() => {
-    if (onboardingActive && onboardingStep >= 3 && aboutOpen) {
+    if (onboardingActive && onboardingStep >= 4 && aboutOpen) {
       setAboutOpen(false)
     }
   }, [onboardingActive, onboardingStep, aboutOpen])

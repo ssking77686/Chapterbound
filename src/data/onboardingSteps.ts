@@ -8,6 +8,13 @@ export interface OnboardingStep {
 
 export const steps: OnboardingStep[] = [
   {
+    id: 'welcome',
+    target: '',
+    placement: 'center',
+    title: '书中的世界，自动为你整理',
+    description: '一份简单的入门指南，带你快速了解核心功能。只需几分钟，就能上手阅读和管理你的书籍。',
+  },
+  {
     id: 'import-book',
     target: 'import-button',
     placement: 'bottom',
