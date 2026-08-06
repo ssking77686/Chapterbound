@@ -173,15 +173,10 @@ export class EpubEngine implements IReaderEngine {
     return this.computeProgress(cfi)
   }
 
-  setTheme(theme: 'light' | 'dark'): void {
+  setPageColors(colors: { background: string; text: string }): void {
     if (!this.rendition) return
-    if (theme === 'dark') {
-      this.rendition.themes.override('color', '#F5EFE6')
-      this.rendition.themes.override('background', '#2B2420')
-    } else {
-      this.rendition.themes.override('color', '#3C3226')
-      this.rendition.themes.override('background', '#FDFBF7')
-    }
+    this.rendition.themes.override('color', colors.text)
+    this.rendition.themes.override('background', colors.background)
   }
 
   resize(width: number, height: number): void {

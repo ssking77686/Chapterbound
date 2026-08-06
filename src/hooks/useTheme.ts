@@ -1,55 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
-
-type Theme = 'light' | 'dark'
-
-const STORAGE_KEY = 'ereader-theme'
-
-function isValidTheme(v: unknown): v is Theme {
-  return v === 'light' || v === 'dark'
-}
-
-function getSystemTheme(): Theme {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
-function loadTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (isValidTheme(stored)) return stored
-  return getSystemTheme()
-}
-
-function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme
-}
+import { useCallback, useEffect } from 'react'
+import { useSettingsStore } from '../stores/settingsStore'
+import { PAGE_THEME_DEFAULT_DARK, PAGE_THEME_DEFAULT_LIGHT, isDarkBackground } from '../data/themes'
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(loadTheme)
+  const pageTheme = useSettingsStore((s) => s.settings.pageTheme)
+  const updateSettings = useSettingsStore((s) => s.updateSettings)
+  const isDark = isDarkBackground(pageTheme.background)
 
   useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (!stored) {
-        const systemTheme = getSystemTheme()
-        setTheme(systemTheme)
-        applyTheme(systemTheme)
-      }
-    }
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+  }, [isDark])
 
   const toggle = useCallback(() => {
-    setTheme((prev) => {
-      const next: Theme = prev === 'light' ? 'dark' : 'light'
-      localStorage.setItem(STORAGE_KEY, next)
-      return next
-    })
-  }, [])
+    const next = isDark ? PAGE_THEME_DEFAULT_LIGHT : PAGE_THEME_DEFAULT_DARK
+    updateSettings({ pageTheme: { background: next.background, text: next.text } })
+  }, [isDark, updateSettings])
 
-  return { theme, toggle, isDark: theme === 'dark' } as const
+  return { isDark, toggle } as const
 }
