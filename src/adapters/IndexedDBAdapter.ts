@@ -155,9 +155,14 @@ export class IndexedDBAdapter implements IStorageAdapter {
       ...data.locations,
       ...data.monsters,
     ].map((item) => ({
-      ...item,
+      id: item.id,
       bookId,
+      name: item.name,
       aliases: item.aliases ?? [],
+      image: item.image,
+      category: item.category,
+      description: item.description,
+      history: item.history,
       relations: dedupRelations(item.relations ?? []),
       quotations: (item.quotations ?? []).map((q) => (
         q.chapter !== undefined ? { ...q, unlocked: false } : { ...q, unlocked: true }
