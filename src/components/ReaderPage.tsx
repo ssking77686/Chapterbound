@@ -714,6 +714,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
           }}
           aria-label="下一页"
+          data-onboarding-id="page-turn-right"
         >
           <ChevronRight className="h-4 w-4" />
         </motion.button>

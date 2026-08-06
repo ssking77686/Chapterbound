@@ -4,6 +4,7 @@ import { useBookshelfStore } from '../stores/bookshelfStore'
 import { BookOpen, Trash2, Plus, Sun, Moon, ImageIcon, Undo2, Info } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { AboutOverlay } from './AboutOverlay'
+import { useOnboardingStore } from '../stores/onboardingStore'
 
 interface Props {
   onOpenBook: (id: string) => void
@@ -22,7 +23,16 @@ export function LibraryPage({ onOpenBook }: Props) {
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
   const [editingCoverId, setEditingCoverId] = useState<string | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const onboardingStep = useOnboardingStore((s) => s.currentStep)
+  const onboardingActive = useOnboardingStore((s) => s.isActive)
   const pendingRemovals = useRef<Set<string>>(new Set())
+
+  // Auto-close AboutOverlay when onboarding moves past repo link step
+  useEffect(() => {
+    if (onboardingActive && onboardingStep >= 3 && aboutOpen) {
+      setAboutOpen(false)
+    }
+  }, [onboardingActive, onboardingStep, aboutOpen])
 
   useEffect(() => {
     loadBooks()
@@ -193,6 +203,7 @@ export function LibraryPage({ onOpenBook }: Props) {
                     className="group relative cursor-pointer"
                     style={{ borderRadius: 'var(--radius-card)' }}
                     onClick={() => onOpenBook(book.id)}
+                    {...(book.id === 'test-book-star-sand-town' ? { 'data-onboarding-id': 'test-book' } : {})}
                   >
                     <motion.div
                       className="overflow-hidden p-3"
