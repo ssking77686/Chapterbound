@@ -10,6 +10,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore'
 import type { TOCItem } from '../core/types'
+import { PAGE_THEME_PRESETS } from '../data/themes'
 
 interface Props {
   bookId: string
@@ -106,10 +107,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
     )
   }, [pageKey])
 
-  // 暗夜模式切换时更新 iframe 内文字颜色
+  // 页面主题变化时更新 iframe 内文字颜色
+  const pageTheme = settings.pageTheme
   useEffect(() => {
-    getEngine()?.setTheme(isDark ? 'dark' : 'light')
-  }, [isDark, pageInfo.total, getEngine])
+    getEngine()?.setPageColors(pageTheme)
+  }, [pageTheme, pageInfo.total, getEngine])
 
   // 监听选中文字事件，弹出检索按钮
   useEffect(() => {
@@ -1272,6 +1274,51 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           {opt.label}
                         </motion.button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* 页面主题 */}
+                  <div>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      页面主题
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PAGE_THEME_PRESETS.map((preset) => {
+                        const isActive = settings.pageTheme.background === preset.background
+                          && settings.pageTheme.text === preset.text
+                        return (
+                          <motion.button
+                            key={preset.id}
+                            className="flex flex-col items-center gap-1.5 rounded-xl py-2.5 px-1"
+                            style={{
+                              background: isActive ? 'var(--color-accent)' : 'var(--color-card)',
+                              color: isActive ? '#fff' : 'var(--color-text)',
+                              border: isActive ? 'none' : '1px solid var(--color-separator)',
+                            }}
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.96 }}
+                            transition={springPress}
+                            onClick={() => handleSettingsChange({
+                              pageTheme: { background: preset.background, text: preset.text },
+                            })}
+                          >
+                            <div
+                              className="flex h-8 w-full items-center justify-center rounded-md text-[0.625rem] font-medium"
+                              style={{
+                                background: preset.background,
+                                color: preset.text,
+                                border: isActive ? '2px solid rgba(255,255,255,0.5)' : '1px solid var(--color-separator)',
+                              }}
+                            >
+                              Aa
+                            </div>
+                            <span className="text-[0.6875rem] leading-tight">{preset.nameZh}</span>
+                          </motion.button>
+                        )
+                      })}
                     </div>
                   </div>
 

@@ -61,6 +61,7 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
         // load() 完成后初始化 chapterMap 和 compendium
         const settings = useSettingsStore.getState().settings
         engine.applySettings(settings)
+        engine.setPageColors(settings.pageTheme)
 
         chapterMapRef.current = await engine.getChapterMap()
         useCompendiumStore.getState().loadCompendium(bookId).catch(() => {})
