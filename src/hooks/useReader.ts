@@ -17,7 +17,6 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const saveProgress = useProgressStore((s) => s.saveProgress)
   const loadProgress = useProgressStore((s) => s.loadProgress)
   const [pageInfo, setPageInfo] = useState<PageInfo>({ current: 0, total: 0 })
-  const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -35,7 +34,6 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
         // 监听器必须在 load() 之前注册——load() 内部会触发 relocated 和 ready 事件
         engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
           saveProgress(bookId, loc as string, prog as number)
-          setProgress(prog as number)
           if (typeof page === 'number' && typeof total === 'number') {
             setPageInfo({ current: page, total })
           }
@@ -111,5 +109,5 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
     return () => ro.disconnect()
   }, [pageInfo.total, containerRef])
 
-  return { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, progress, applySettings, error }
+  return { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, applySettings, error }
 }
