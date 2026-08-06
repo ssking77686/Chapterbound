@@ -39,6 +39,7 @@ const sidebarTabs = [
 export function ReaderPage({ bookId, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { nextPage, prevPage, getEngine, getCurrentChapter, pageInfo, applySettings, error } = useReader(bookId, containerRef)
+  const readProgress = pageInfo.total > 0 ? Math.round((pageInfo.current / pageInfo.total) * 100) : 0
   const book = useBookshelfStore((s) => s.books.find((b) => b.id === bookId))
   const { bookmarks, loadBookmarks, addBookmark, getBookmarkAt, removeBookmark } = useBookmarkStore()
   const { loadHighlights } = useHighlightStore()
@@ -473,6 +474,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
             else handleNext()
           }}
         >
+          {/* 阅读进度条 */}
+          {settings.showProgressBar && pageInfo.total > 0 && (
+            <div
+              className="absolute top-0 left-0 right-0 z-10"
+              style={{ height: 3, background: 'var(--color-separator)', borderRadius: 'var(--radius-card) var(--radius-card) 0 0' }}
+              role="progressbar"
+              aria-valuenow={readProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="阅读进度"
+            >
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: 'var(--color-accent)' }}
+                animate={{ width: `${readProgress}%` }}
+                transition={{ type: 'spring' as const, bounce: 0, duration: 0.3 }}
+              />
+            </div>
+          )}
+
           <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
 
           {/* 选中文字检索浮窗 */}
@@ -1252,6 +1273,34 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         </motion.button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* 进度条开关 */}
+                  <div className="flex items-center justify-between">
+                    <p
+                      className="text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      阅读进度条
+                    </p>
+                    <motion.button
+                      className="relative flex h-7 w-11 items-center rounded-full"
+                      style={{
+                        background: settings.showProgressBar ? 'var(--color-accent)' : 'var(--color-separator)',
+                      }}
+                      whileTap={{ scale: 0.94 }}
+                      transition={springPress}
+                      onClick={() => handleSettingsChange({ showProgressBar: !settings.showProgressBar })}
+                      role="switch"
+                      aria-checked={settings.showProgressBar}
+                      aria-label="阅读进度条"
+                    >
+                      <motion.div
+                        className="h-5 w-5 rounded-full bg-white shadow-sm"
+                        animate={{ x: settings.showProgressBar ? 20 : 3 }}
+                        transition={{ type: 'spring' as const, bounce: 0, duration: 0.25 }}
+                      />
+                    </motion.button>
                   </div>
                 </div>
               )}
