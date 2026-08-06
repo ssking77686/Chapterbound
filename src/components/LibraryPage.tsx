@@ -114,6 +114,7 @@ export function LibraryPage({ onOpenBook }: Props) {
               transition={springPress}
               style={{ color: 'var(--color-text)' }}
               aria-label="关于项目"
+              data-onboarding-id="about-button"
             >
               <Info className="h-5 w-5" />
             </motion.button>
@@ -123,6 +124,7 @@ export function LibraryPage({ onOpenBook }: Props) {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.96 }}
             transition={springPress}
+            data-onboarding-id="import-button"
           >
             <Plus className="h-4 w-4" />
             导入书籍
