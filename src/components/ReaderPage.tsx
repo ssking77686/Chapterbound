@@ -423,6 +423,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           transition={springPress}
           style={{ color: 'var(--color-text)' }}
           aria-label="设置"
+          data-onboarding-id="settings-button"
         >
           <Settings className="h-5 w-5" />
         </motion.button>
@@ -475,6 +476,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             if (relX < mid) handlePrev()
             else handleNext()
           }}
+          data-onboarding-id="page-area"
         >
           {/* 阅读进度条 */}
           {settings.showProgressBar && pageInfo.total > 0 && (
@@ -712,6 +714,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
           }}
           aria-label="下一页"
+          data-onboarding-id="page-turn-right"
         >
           <ChevronRight className="h-4 w-4" />
         </motion.button>
@@ -785,6 +788,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       color: sidebarTab === tab.key ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     }}
                     onClick={() => setSidebarTab(tab.key)}
+                    {...(tab.key === 'compendium' ? { 'data-onboarding-id': 'compendium-tab' } : {})}
                   >
                     {tab.label}
                     {sidebarTab === tab.key && (

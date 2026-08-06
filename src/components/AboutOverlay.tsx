@@ -188,6 +188,7 @@ export function AboutOverlay({ open, onClose }: Props) {
                 rel="noopener noreferrer"
                 className="mb-3 flex items-center gap-3 rounded-2xl p-4"
                 style={{ background: 'var(--color-card)', boxShadow: 'var(--shadow-card)' }}
+                data-onboarding-id="repo-link"
                 whileHover={{ y: -2, boxShadow: 'var(--shadow-float)', transition: springDefault }}
                 whileTap={{ scale: 0.97, transition: springPress }}
                 initial={{ opacity: 0, y: 12 }}
