@@ -474,6 +474,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
             else handleNext()
           }}
         >
+          {/* 阅读进度条 */}
+          {pageInfo.total > 0 && (
+            <div
+              className="absolute top-0 left-0 right-0 z-10"
+              style={{ height: 3, background: 'var(--color-separator)', borderRadius: 'var(--radius-card) var(--radius-card) 0 0' }}
+              role="progressbar"
+              aria-valuenow={readProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="阅读进度"
+            >
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: 'var(--color-accent)' }}
+                animate={{ width: `${readProgress}%` }}
+                transition={{ type: 'spring' as const, bounce: 0, duration: 0.3 }}
+              />
+            </div>
+          )}
+
           <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
 
           {/* 选中文字检索浮窗 */}
