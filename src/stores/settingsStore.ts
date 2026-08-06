@@ -1,11 +1,17 @@
 import { create } from 'zustand'
 
+export interface PageThemeColors {
+  background: string
+  text: string
+}
+
 export interface ReaderSettings {
   fontSize: number
   fontFamily: string
   lineHeight: number
   compendiumFontScale: number
   showProgressBar: boolean
+  pageTheme: PageThemeColors
 }
 
 const STORAGE_KEY = 'ereader-settings'
@@ -16,6 +22,10 @@ const defaults: ReaderSettings = {
   lineHeight: 1.8,
   compendiumFontScale: 1.0,
   showProgressBar: true,
+  pageTheme: {
+    background: '#FDFBF7',
+    text: '#3C3226',
+  },
 }
 
 function load(): ReaderSettings {
