@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="./README.md">中文</a> | <a href="./DEVELOPMENT.md">Developer Docs</a>
+  <a href="./README.md">中文</a> | <a href="./DEVELOPMENT.md">Developer Docs</a> | <a href="./DEVELOPMENT_EN.md">Developer Docs (EN)</a>
 </p>
 
 <h1 align="center">E-Reader</h1>
@@ -72,6 +72,7 @@ npm run lint     # lint
 
 - [中文 README](./README.md)
 - [Developer Documentation](./DEVELOPMENT.md)
+- [Developer Documentation (EN)](./DEVELOPMENT_EN.md)
 - [Compendium Writing Guide](public/guides/compendium-guide.md) — send to AI to generate compendium JSON
 - [Compendium Schema Reference](public/guides/compendium-schema.md)
 - [Compendium User Guide](public/guides/compendium-readme.md)

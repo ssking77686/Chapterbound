@@ -72,6 +72,7 @@ npm run lint     # 代码检查
 
 - [English README](./README_EN.md)
 - [开发者文档](./DEVELOPMENT.md)
+- [Developer Documentation (EN)](./DEVELOPMENT_EN.md)
 - [写作指南](public/guides/compendium-guide.md) — 发给 AI 生成图鉴 JSON
 - [图鉴 JSON 字段速查](public/guides/compendium-schema.md)
 - [图鉴使用说明](public/guides/compendium-readme.md)
