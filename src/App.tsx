@@ -17,7 +17,7 @@ async function ensureTestData() {
   const existing = await storage.getBook(TEST_BOOK_ID)
   if (existing) return
 
-  const resp = await fetch('/test-book.epub')
+  const resp = await fetch('./test-book.epub')
   const buffer = await resp.arrayBuffer()
 
   const parser = registry.getParser(BookFormat.EPUB)
@@ -51,20 +51,20 @@ async function ensureTestData() {
 
 export default function App() {
   const [readingBookId, setReadingBookId] = useState<string | null>(null)
-  const hasCompleted = useOnboardingStore((s) => s.hasCompleted)
+  const dismissed = useOnboardingStore((s) => s.dismissedPermanently)
   const isActive = useOnboardingStore((s) => s.isActive)
   const pendingNav = useOnboardingStore((s) => s.pendingNavigation)
   const clearNav = useOnboardingStore((s) => s.clearNavigation)
   const startOnboarding = useOnboardingStore((s) => s.start)
 
-  // Initialize test data on first launch, then start onboarding
+  // Start onboarding on every launch unless user permanently dismissed
   useEffect(() => {
-    if (!hasCompleted) {
+    if (!dismissed) {
       ensureTestData().then(() => {
         startOnboarding()
       }).catch(() => {})
     }
-  }, [hasCompleted, startOnboarding])
+  }, [dismissed, startOnboarding])
 
   // Respond to cross-page navigation from onboarding
   useEffect(() => {
@@ -100,7 +100,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {!hasCompleted && isActive && <OnboardingOverlay />}
+      {!dismissed && isActive && <OnboardingOverlay />}
     </>
   )
 }

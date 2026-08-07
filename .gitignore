@@ -36,6 +36,7 @@ src-tauri/gen/
 
 # Electron build artifacts
 release/
+electron-dist/
 
 # Rust
 *.rs.bk
