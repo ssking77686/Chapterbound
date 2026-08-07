@@ -83,6 +83,7 @@ export function OnboardingOverlay() {
   const currentStep = useOnboardingStore((s) => s.currentStep)
   const advance = useOnboardingStore((s) => s.advance)
   const skip = useOnboardingStore((s) => s.skip)
+  const dismissForever = useOnboardingStore((s) => s.dismissForever)
   const booksCount = useBookshelfStore((s) => s.books.length)
 
   const step = steps[currentStep]
@@ -323,16 +324,25 @@ export function OnboardingOverlay() {
           )}
 
           {currentStep === 0 ? (
-            <motion.button
-              className="rounded-full px-8 py-3 text-base font-semibold text-white"
-              style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)' }}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              transition={springPress}
-              onClick={advance}
-            >
-              开始教程
-            </motion.button>
+            <div className="flex flex-col items-center gap-2">
+              <motion.button
+                className="rounded-full px-8 py-3 text-base font-semibold text-white"
+                style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)' }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                transition={springPress}
+                onClick={advance}
+              >
+                开始教程
+              </motion.button>
+              <button
+                className="text-xs opacity-50 hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onClick={dismissForever}
+              >
+                不再显示引导
+              </button>
+            </div>
           ) : currentStep < steps.length - 1 ? (
             currentStep === 4 ? (
               <motion.button
