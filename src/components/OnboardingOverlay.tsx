@@ -82,7 +82,6 @@ function getCardPos(target: Cutout | null, placement: string, cardH: number): { 
 export function OnboardingOverlay() {
   const currentStep = useOnboardingStore((s) => s.currentStep)
   const advance = useOnboardingStore((s) => s.advance)
-  const skip = useOnboardingStore((s) => s.skip)
   const dismissForever = useOnboardingStore((s) => s.dismissForever)
   const booksCount = useBookshelfStore((s) => s.books.length)
 
