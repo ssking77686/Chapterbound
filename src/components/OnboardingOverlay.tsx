@@ -361,29 +361,6 @@ export function OnboardingOverlay() {
               >
                 开始探索
               </motion.button>
-            ) : currentStep === 1 ? (
-              <div className="flex items-center gap-2">
-                <motion.button
-                  className="rounded-full px-4 py-2 text-xs font-medium"
-                  style={{ color: 'var(--color-text-secondary)', background: 'transparent' }}
-                  whileHover={{ background: 'rgba(60,50,38,0.06)' }}
-                  whileTap={{ scale: 0.96 }}
-                  transition={springPress}
-                  onClick={advance}
-                >
-                  继续
-                </motion.button>
-                <motion.button
-                  className="rounded-full px-3 py-2 text-xs font-medium opacity-50"
-                  style={{ color: 'var(--color-text-secondary)', background: 'transparent' }}
-                  whileHover={{ background: 'rgba(60,50,38,0.06)', opacity: 0.7 }}
-                  whileTap={{ scale: 0.96 }}
-                  transition={springPress}
-                  onClick={skip}
-                >
-                  跳过
-                </motion.button>
-              </div>
             ) : (
               <motion.button
                 className="rounded-full px-4 py-2 text-xs font-medium"
@@ -391,7 +368,7 @@ export function OnboardingOverlay() {
                 whileHover={{ background: 'rgba(60,50,38,0.06)' }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
-                onClick={skip}
+                onClick={advance}
               >
                 跳过
               </motion.button>
