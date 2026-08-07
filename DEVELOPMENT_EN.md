@@ -36,7 +36,7 @@ src/
 ├── engines/        # Reading engine (EpubEngine)
 ├── parsers/        # Metadata parser (EpubParser)
 ├── features/       # Feature plugins (reserved extension points)
-├── stores/         # Zustand stores (6 independent stores)
+├── stores/         # Zustand stores (7 independent stores)
 ├── hooks/          # React hooks (useReader, useKeyboard, useTheme)
 ├── components/     # UI components (LibraryPage, ReaderPage, AboutOverlay)
 └── plugins/        # App startup wiring (default-plugins)
@@ -54,7 +54,7 @@ Plugin-based design — engines, parsers, storage, and feature modules all regis
 
 ### State Management (Zustand)
 
-Six independent stores:
+Seven independent stores:
 
 | Store | Responsibility |
 |-------|---------------|
@@ -62,8 +62,9 @@ Six independent stores:
 | `bookmarkStore` | Bookmark CRUD, per-bookId filtering |
 | `highlightStore` | Highlight CRUD, with notes support |
 | `progressStore` | Reading position save/load, per-bookId |
-| `settingsStore` | Reader settings + compendium font scale, persisted to localStorage |
+| `settingsStore` | Reader settings + page theme + compendium font scale, persisted to localStorage |
 | `compendiumStore` | Compendium import/load/unlock/search |
+| `onboardingStore` | Onboarding guide state, localStorage persistence, cross-page navigation |
 
 ### Design System
 

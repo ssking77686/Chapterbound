@@ -47,13 +47,16 @@ The project's standout feature. As you read, characters, locations, and monsters
 - Import EPUB with automatic cover and metadata extraction
 - Custom cover upload and reset
 - Auto-saved reading progress, picks up where you left off
+- Reading progress bar: drag-to-seek with precise page display
 - Adjustable font size, family, and line height, preferences persist
+- Page themes: 5 preset color schemes, independent of light/dark mode
 - Light / dark mode, manual toggle or follow system
 - Warm dark palette, easy on the eyes
 - Dual-page spread on wide screens, responsive library grid
 - Colored bookmarks (5 colors), sidebar management with jump-to
 - Text highlighting
 - TOC chapter navigation
+- Onboarding guide: 6-step interactive walkthrough on first visit
 
 ---
 
@@ -80,6 +83,13 @@ npm run lint     # lint
 ---
 
 ## Changelog
+
+**v1.3.0** (2026-08)
+- Onboarding system: auto-triggered on first visit, SVG mask capsule cutout highlights target elements with spring transitions, 6 steps covering import → open book → page turn → settings → compendium → bookmarks
+- Page theme system: 5 preset color schemes (White / Warm Yellow / Warm Brown / Dark Brown / Dark Green), theme selector in settings panel, reader background independent from light/dark mode
+- Reading progress bar: drag-to-seek bottom bar with precise page-ratio calculation
+- Dark mode color refinements
+- Fixed spread leakage with explicit field picking to prevent JSON contamination in IndexedDB
 
 **v1.2.0** (2026-08)
 - Compendium dual-column layout: profile info and reading content side-by-side on ultrawide screens
