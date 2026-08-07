@@ -173,6 +173,10 @@ export class EpubEngine implements IReaderEngine {
     return this.computeProgress(cfi)
   }
 
+  setColumnMode(mode: 'auto' | 'single'): void {
+    this.rendition?.spread(mode === 'single' ? 'none' : 'auto')
+  }
+
   setPageColors(colors: { background: string; text: string }): void {
     if (!this.rendition) return
     this.rendition.themes.override('color', colors.text)

@@ -38,11 +38,11 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   advance: () => {
     const { currentStep } = get()
     const next = currentStep + 1
-    // Step 3 (start-exploring) → Step 4 (page-turn): signal to navigate to reader
-    if (next === 4) {
+    // Step 4 (start-exploring) → Step 5 (page-turn): signal to navigate to reader
+    if (next === 5) {
       set({ currentStep: next, pendingNavigation: 'reader' })
-    } else if (next >= 8) {
-      // All 8 steps done
+    } else if (next >= 9) {
+      // All 9 steps done
       saveCompleted()
       set({ isActive: false, hasCompleted: true })
     } else {

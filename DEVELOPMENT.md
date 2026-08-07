@@ -36,7 +36,7 @@ src/
 ├── engines/        # 阅读引擎（EpubEngine）
 ├── parsers/        # 元数据解析器（EpubParser）
 ├── features/       # 功能插件（预留扩展点）
-├── stores/         # Zustand store（5 个独立 store）
+├── stores/         # Zustand store（7 个独立 store）
 ├── hooks/          # React hooks（useReader, useKeyboard, useTheme）
 ├── components/     # UI 组件（LibraryPage, ReaderPage, AboutOverlay）
 └── plugins/        # 应用启动注册（default-plugins）
@@ -54,7 +54,7 @@ src/
 
 ### 状态管理 (Zustand)
 
-五个独立 store：
+七 个独立 store：
 
 | Store | 职责 |
 |-------|------|
@@ -62,8 +62,9 @@ src/
 | `bookmarkStore` | 书签 CRUD，按 bookId 过滤 |
 | `highlightStore` | 高亮 CRUD，支持备注 |
 | `progressStore` | 阅读位置保存/加载，按 bookId |
-| `settingsStore` | 阅读器设置 + 图鉴字号，持久化到 localStorage |
+| `settingsStore` | 阅读器设置 + 页面主题 + 图鉴字号，持久化到 localStorage |
 | `compendiumStore` | 图鉴导入/加载/解锁/搜索 |
+| `onboardingStore` | 入门引导状态，localStorage 持久化，跨页面导航 |
 
 ### 设计系统
 

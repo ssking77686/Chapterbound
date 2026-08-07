@@ -1,13 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { motion } from 'motion/react'
-import { ScrollText, User, MapPin } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
+import { ScrollText, User, MapPin, BookOpen } from 'lucide-react'
 import { useOnboardingStore } from '../stores/onboardingStore'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { steps } from '../data/onboardingSteps'
 
 const CARD_W = 300
+const WELCOME_CARD_W = 480
 const PADDING = 10
 const HIGHLIGHT_GLOW = '0 0 12px rgba(184,124,75,0.35), 0 0 28px rgba(184,124,75,0.18)'
+
+const STAR_PARTICLES = [
+  { x: 0.12, y: 0.18, size: 4, dr: 8, period: 4.2 },
+  { x: 0.82, y: 0.22, size: 3, dr: 6, period: 3.8 },
+  { x: 0.08, y: 0.72, size: 5, dr: 10, period: 5.1 },
+  { x: 0.76, y: 0.68, size: 3, dr: 7, period: 4.5 },
+  { x: 0.45, y: 0.10, size: 6, dr: 12, period: 5.8 },
+  { x: 0.55, y: 0.85, size: 4, dr: 8, period: 3.5 },
+  { x: 0.25, y: 0.55, size: 3, dr: 5, period: 4.0 },
+  { x: 0.68, y: 0.42, size: 5, dr: 9, period: 4.8 },
+]
 
 const springDefault = { type: 'spring' as const, bounce: 0, duration: 0.3 }
 const springPress = { type: 'spring' as const, bounce: 0, duration: 0.2 }
@@ -81,15 +93,15 @@ export function OnboardingOverlay() {
   const [cardHeight, setCardHeight] = useState(160)
   const initialBookCount = useRef(booksCount)
 
-  // Step 0: advance when a new book is imported
+  // Step 1: advance when a new book is imported
   useEffect(() => {
-    if (currentStep !== 0) return
+    if (currentStep !== 1) return
     if (booksCount > initialBookCount.current) advance()
   }, [currentStep, booksCount, advance])
 
-  // Step 1: advance when AboutOverlay opens (repo-link appears in DOM)
+  // Step 2: advance when AboutOverlay opens (repo-link appears in DOM)
   useEffect(() => {
-    if (currentStep !== 1) return
+    if (currentStep !== 2) return
     const id = setInterval(() => {
       if (document.querySelector('[data-onboarding-id="repo-link"]')) {
         advance()
@@ -125,10 +137,10 @@ export function OnboardingOverlay() {
     return () => ro.disconnect()
   }, [step.id])
 
-  // Click-to-advance: only for steps that need it (2:repo-link, 4:page-turn, 5:settings, 6:compendium).
-  // Steps 0 (import) and 1 (about) use outcome detection instead.
+  // Click-to-advance: only for steps that need it (3:repo-link, 5:page-turn, 6:settings, 7:compendium).
+  // Steps 1 (import) and 2 (about) use outcome detection instead.
   const attachClick = useCallback(() => {
-    if (!step.target || currentStep <= 1) return
+    if (!step.target || currentStep <= 2) return
     const el = document.querySelector(`[data-onboarding-id="${step.target}"]`)
     if (!el) return false
     const handler = () => advance()
@@ -137,7 +149,7 @@ export function OnboardingOverlay() {
   }, [step.target, currentStep, advance])
 
   useEffect(() => {
-    if (!step.target || currentStep <= 1) return
+    if (!step.target || currentStep <= 2) return
     if (attachClick()) return
     const id = setInterval(() => { if (attachClick()) clearInterval(id) }, 150)
     return () => clearInterval(id)
@@ -145,12 +157,62 @@ export function OnboardingOverlay() {
 
   // For text-search step, position card at top so it doesn't block the demo
   const isLastStep = step.id === 'text-search'
+  const isWelcome = step.id === 'welcome'
+  const cardW = isWelcome ? WELCOME_CARD_W : CARD_W
   const cardPos = isLastStep
     ? { x: (window.innerWidth - CARD_W) / 2, y: 24 }
-    : getCardPos(targetRect, step.placement, cardHeight)
+    : isWelcome
+      ? { x: (window.innerWidth - WELCOME_CARD_W) / 2, y: window.innerHeight * 0.3 }
+      : getCardPos(targetRect, step.placement, cardHeight)
 
   return (
     <div className="fixed inset-0" style={{ zIndex: 100, pointerEvents: 'none' }}>
+      {/* Welcome scrim — dims the bookshelf behind */}
+      <AnimatePresence>
+        {isWelcome && (
+          <motion.div
+            className="fixed inset-0"
+            style={{ background: 'rgba(0,0,0,0.22)', zIndex: 100 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Star萤 particles — only during welcome */}
+      <AnimatePresence>
+        {isWelcome &&
+          STAR_PARTICLES.map((p, i) => (
+            <motion.div
+              key={i}
+              className="fixed rounded-full"
+              style={{
+                left: `${p.x * 100}%`,
+                top: `${p.y * 100}%`,
+                width: p.size,
+                height: p.size,
+                background: '#e8c47c',
+                boxShadow: `0 0 ${p.dr}px rgba(232,196,124,0.6), 0 0 ${p.dr * 2}px rgba(184,124,75,0.25)`,
+                zIndex: 100,
+              }}
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: [0, 0, 0.9, 0.6, 0.9, 0.3, 0],
+                x: [0, Math.cos(i * 1.2) * 40, Math.cos(i * 1.2 + 1.5) * 50, Math.cos(i * 1.2 + 3) * 30, Math.cos(i * 1.2 + 4.5) * 45, Math.cos(i * 1.2 + 6) * 20],
+                y: [0, Math.sin(i * 0.9) * 30, Math.sin(i * 0.9 + 1.5) * 45, Math.sin(i * 0.9 + 3) * 25, Math.sin(i * 0.9 + 4.5) * 40, Math.sin(i * 0.9 + 6) * 15],
+              }}
+              transition={{
+                duration: p.period,
+                repeat: Infinity,
+                ease: 'easeInOut',
+                delay: i * 0.15,
+              }}
+            />
+          ))}
+      </AnimatePresence>
+
       {/* Pulsing highlight ring around target */}
       {targetRect && (
         <motion.div
@@ -174,48 +236,105 @@ export function OnboardingOverlay() {
       {/* Tooltip card */}
       <motion.div
         ref={cardRef}
-        className="flex flex-col gap-3 p-5"
+        className={isWelcome ? 'flex flex-col items-center gap-4 p-8 text-center' : 'flex flex-col gap-3 p-5'}
         style={{
           position: 'fixed',
-          width: CARD_W,
-          background: 'var(--color-card)',
+          width: cardW,
+          background: 'rgba(255,245,235,0.72)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           borderRadius: 16,
           boxShadow: '0 12px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)',
+          borderTop: '1px solid rgba(255,255,255,0.5)',
           pointerEvents: 'auto',
           zIndex: 102,
         }}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0, left: cardPos.x, top: cardPos.y }}
-        transition={springDefault}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1, left: cardPos.x, top: cardPos.y }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
       >
-        <h2 className="text-base font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
-          {step.title}
-        </h2>
-        <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-          {step.description}
-        </p>
+        {isWelcome ? (
+          <>
+            <motion.div
+              className="flex h-20 w-20 items-center justify-center rounded-2xl mb-1"
+              style={{
+                background: 'rgba(184,124,75,0.1)',
+              }}
+              animate={{ boxShadow: ['0 0 16px rgba(184,124,75,0.1)', '0 0 40px rgba(184,124,75,0.28)', '0 0 16px rgba(184,124,75,0.1)'] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <BookOpen className="h-9 w-9" style={{ color: 'var(--color-accent)' }} />
+            </motion.div>
+            <p
+              className="font-medium tracking-widest"
+              style={{ color: 'var(--color-text-secondary)', fontSize: '0.6875rem', textTransform: 'uppercase' }}
+            >
+              电子阅读器
+            </p>
+            <h2
+              className="font-bold leading-tight"
+              style={{ color: 'var(--color-text)', fontSize: '2rem', letterSpacing: '-0.02em', maxWidth: 380, fontFamily: '"Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", serif' }}
+            >
+              书中的世界，自动为你整理
+            </h2>
+            <p
+              className="leading-relaxed"
+              style={{ color: 'var(--color-text-secondary)', fontSize: '0.9375rem', maxWidth: 380 }}
+            >
+              一份简单的入门指南，带你快速了解核心功能。只需几分钟，就能上手阅读和管理你的书籍。
+            </p>
+          </>
+        ) : (
+          <>
+            <h2
+              className="font-semibold leading-tight"
+              style={{ color: 'var(--color-text)', fontSize: '1rem' }}
+            >
+              {step.title}
+            </h2>
+            <p
+              className="leading-relaxed"
+              style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}
+            >
+              {step.description}
+            </p>
+          </>
+        )}
 
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1.5">
-            {steps.map((_, i) => (
-              <div
-                key={i}
-                className="rounded-full transition-all"
-                style={{
-                  width: i === currentStep ? 16 : 6,
-                  height: 6,
-                  background: i === currentStep
-                    ? 'var(--color-accent)'
-                    : i < currentStep
-                      ? 'var(--color-text-secondary)'
-                      : 'var(--color-separator)',
-                }}
-              />
-            ))}
-          </div>
+        <div className={isWelcome ? 'flex items-center justify-center pt-2' : 'flex items-center justify-between pt-1'}>
+          {!isWelcome && (
+            <div className="flex items-center gap-1.5">
+              {steps.map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-full transition-all"
+                  style={{
+                    width: i === currentStep ? 16 : 6,
+                    height: 6,
+                    background: i === currentStep
+                      ? 'var(--color-accent)'
+                      : i < currentStep
+                        ? 'var(--color-text-secondary)'
+                        : 'var(--color-separator)',
+                  }}
+                />
+              ))}
+            </div>
+          )}
 
-          {currentStep < steps.length - 1 ? (
-            currentStep === 3 ? (
+          {currentStep === 0 ? (
+            <motion.button
+              className="rounded-full px-8 py-3 text-base font-semibold text-white"
+              style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)' }}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              transition={springPress}
+              onClick={advance}
+            >
+              开始教程
+            </motion.button>
+          ) : currentStep < steps.length - 1 ? (
+            currentStep === 4 ? (
               <motion.button
                 className="rounded-full px-5 py-2 text-sm font-semibold text-white"
                 style={{ background: 'var(--color-accent)' }}
@@ -254,7 +373,7 @@ export function OnboardingOverlay() {
       </motion.div>
 
       {/* Step 8 (last): text search demo — sequential animation */}
-      {currentStep === 7 && (
+      {currentStep === 8 && (
         <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 101, pointerEvents: 'none' }}>
           <motion.div
             className="overflow-hidden"
