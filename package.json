@@ -1,7 +1,7 @@
 {
   "name": "Chapterbound",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.3.1",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -29,6 +29,7 @@
   "build": {
     "appId": "com.ereader.app",
     "productName": "Chapterbound",
+    "electronDist": "electron-dist",
     "directories": {
       "output": "release"
     },
