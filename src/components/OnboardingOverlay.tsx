@@ -156,15 +156,20 @@ export function OnboardingOverlay() {
     return () => clearInterval(id)
   }, [step.target, currentStep, attachClick])
 
-  // For text-search step, position card at top so it doesn't block the demo
-  const isLastStep = step.id === 'text-search'
+  const isCentered = step.placement === 'center'
   const isWelcome = step.id === 'welcome'
   const cardW = isWelcome ? WELCOME_CARD_W : CARD_W
-  const cardPos = isLastStep
-    ? { x: (window.innerWidth - CARD_W) / 2, y: 24 }
-    : isWelcome
-      ? { x: (window.innerWidth - WELCOME_CARD_W) / 2, y: window.innerHeight * 0.3 }
-      : getCardPos(targetRect, step.placement, cardHeight)
+
+  const [windowSize, setWindowSize] = useState({ w: typeof window !== 'undefined' ? window.innerWidth : 1024, h: typeof window !== 'undefined' ? window.innerHeight : 768 })
+  useEffect(() => {
+    const onResize = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const cardPos = isCentered
+    ? { x: (windowSize.w - cardW) / 2, y: isWelcome ? windowSize.h * 0.35 : 24 }
+    : getCardPos(targetRect, step.placement, cardHeight)
 
   return (
     <div className="fixed inset-0" style={{ zIndex: 100, pointerEvents: 'none' }}>
@@ -241,6 +246,7 @@ export function OnboardingOverlay() {
         style={{
           position: 'fixed',
           width: cardW,
+          maxWidth: isCentered ? 'calc(100vw - 32px)' : undefined,
           background: 'rgba(255,245,235,0.72)',
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
@@ -355,6 +361,29 @@ export function OnboardingOverlay() {
               >
                 开始探索
               </motion.button>
+            ) : currentStep === 1 ? (
+              <div className="flex items-center gap-2">
+                <motion.button
+                  className="rounded-full px-4 py-2 text-xs font-medium"
+                  style={{ color: 'var(--color-text-secondary)', background: 'transparent' }}
+                  whileHover={{ background: 'rgba(60,50,38,0.06)' }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={springPress}
+                  onClick={advance}
+                >
+                  继续
+                </motion.button>
+                <motion.button
+                  className="rounded-full px-3 py-2 text-xs font-medium opacity-50"
+                  style={{ color: 'var(--color-text-secondary)', background: 'transparent' }}
+                  whileHover={{ background: 'rgba(60,50,38,0.06)', opacity: 0.7 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={springPress}
+                  onClick={skip}
+                >
+                  跳过
+                </motion.button>
+              </div>
             ) : (
               <motion.button
                 className="rounded-full px-4 py-2 text-xs font-medium"
