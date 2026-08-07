@@ -12,6 +12,8 @@ export interface ReaderSettings {
   compendiumFontScale: number
   showProgressBar: boolean
   pageTheme: PageThemeColors
+  pageWidth: number
+  columnMode: 'auto' | 'single'
 }
 
 const STORAGE_KEY = 'ereader-settings'
@@ -26,6 +28,8 @@ const defaults: ReaderSettings = {
     background: '#FDFBF7',
     text: '#3C3226',
   },
+  pageWidth: 0,
+  columnMode: 'auto',
 }
 
 function load(): ReaderSettings {
