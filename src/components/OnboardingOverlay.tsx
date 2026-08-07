@@ -83,6 +83,7 @@ export function OnboardingOverlay() {
   const currentStep = useOnboardingStore((s) => s.currentStep)
   const advance = useOnboardingStore((s) => s.advance)
   const skip = useOnboardingStore((s) => s.skip)
+  const dismissForever = useOnboardingStore((s) => s.dismissForever)
   const booksCount = useBookshelfStore((s) => s.books.length)
 
   const step = steps[currentStep]
@@ -155,15 +156,20 @@ export function OnboardingOverlay() {
     return () => clearInterval(id)
   }, [step.target, currentStep, attachClick])
 
-  // For text-search step, position card at top so it doesn't block the demo
-  const isLastStep = step.id === 'text-search'
+  const isCentered = step.placement === 'center'
   const isWelcome = step.id === 'welcome'
   const cardW = isWelcome ? WELCOME_CARD_W : CARD_W
-  const cardPos = isLastStep
-    ? { x: (window.innerWidth - CARD_W) / 2, y: 24 }
-    : isWelcome
-      ? { x: (window.innerWidth - WELCOME_CARD_W) / 2, y: window.innerHeight * 0.3 }
-      : getCardPos(targetRect, step.placement, cardHeight)
+
+  const [windowSize, setWindowSize] = useState({ w: typeof window !== 'undefined' ? window.innerWidth : 1024, h: typeof window !== 'undefined' ? window.innerHeight : 768 })
+  useEffect(() => {
+    const onResize = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const cardPos = isCentered
+    ? { x: (windowSize.w - cardW) / 2, y: isWelcome ? windowSize.h * 0.35 : 24 }
+    : getCardPos(targetRect, step.placement, cardHeight)
 
   return (
     <div className="fixed inset-0" style={{ zIndex: 100, pointerEvents: 'none' }}>
@@ -240,6 +246,7 @@ export function OnboardingOverlay() {
         style={{
           position: 'fixed',
           width: cardW,
+          maxWidth: isCentered ? 'calc(100vw - 32px)' : undefined,
           background: 'rgba(255,245,235,0.72)',
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
@@ -323,16 +330,25 @@ export function OnboardingOverlay() {
           )}
 
           {currentStep === 0 ? (
-            <motion.button
-              className="rounded-full px-8 py-3 text-base font-semibold text-white"
-              style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)' }}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              transition={springPress}
-              onClick={advance}
-            >
-              开始教程
-            </motion.button>
+            <div className="flex flex-col items-center gap-2">
+              <motion.button
+                className="rounded-full px-8 py-3 text-base font-semibold text-white"
+                style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)' }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                transition={springPress}
+                onClick={advance}
+              >
+                开始教程
+              </motion.button>
+              <button
+                className="text-xs opacity-50 hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onClick={dismissForever}
+              >
+                不再显示引导
+              </button>
+            </div>
           ) : currentStep < steps.length - 1 ? (
             currentStep === 4 ? (
               <motion.button
@@ -352,7 +368,7 @@ export function OnboardingOverlay() {
                 whileHover={{ background: 'rgba(60,50,38,0.06)' }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
-                onClick={skip}
+                onClick={advance}
               >
                 跳过
               </motion.button>
