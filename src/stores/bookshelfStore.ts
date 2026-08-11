@@ -71,7 +71,6 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
     }
 
     const id = crypto.randomUUID()
-    await storage.saveFileData(id, buffer)
 
     const book: BookRecord = {
       id,
@@ -85,7 +84,13 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
       addedAt: Date.now(),
     }
 
-    await storage.saveBook(book)
+    await storage.saveFileData(id, buffer)
+    try {
+      await storage.saveBook(book)
+    } catch (err) {
+      await storage.deleteFileData(id).catch(() => {})
+      throw err
+    }
     await get().loadBooks()
   },
 
