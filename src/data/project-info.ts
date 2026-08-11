@@ -18,7 +18,7 @@ export interface ProjectInfo {
 
 export const projectInfo: ProjectInfo = {
   name: 'Chapterbound',
-  version: 'v1.3.1',
+  version: 'v1.3.2',
   description: '沉浸式 EPUB 电子书阅读器，支持图鉴系统、彩色书签、阅读进度追踪与明暗主题切换。',
   repo: 'https://github.com/ssking77686/Chapterbound',
   license: 'MIT',

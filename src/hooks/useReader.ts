@@ -15,7 +15,7 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const chapterMapRef = useRef<Map<number, number>>(new Map())
   const lastChapterRef = useRef(0)
   const lastSaveRef = useRef(0)
-  const pendingSaveRef = useRef<ReturnType<typeof setTimeout>>()
+  const pendingSaveRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const saveProgress = useProgressStore((s) => s.saveProgress)
   const loadProgress = useProgressStore((s) => s.loadProgress)
   const [pageInfo, setPageInfo] = useState<PageInfo>({ current: 0, total: 0 })
