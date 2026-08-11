@@ -56,7 +56,7 @@ The project's standout feature. As you read, characters, locations, and monsters
 - Colored bookmarks (5 colors), sidebar management with jump-to
 - Text highlighting
 - TOC chapter navigation
-- Onboarding guide: 6-step interactive walkthrough on first visit
+- Onboarding guide: 9-step interactive walkthrough on first visit, can be permanently dismissed
 
 ---
 
@@ -83,6 +83,13 @@ npm run lint     # lint
 ---
 
 ## Changelog
+
+**v1.3.2** (2026-08)
+- Security hardening: React Error Boundary for render-crash recovery, global unhandledrejection handler, transactional IndexedDB writes
+- User feedback: Toast notification system (success/error/info, animated via motion)
+- Data validation: Compendium JSON import runtime schema check, settings type validation
+- Compendium performance: search debounce, infinite scroll (50 per batch), animation delay cap, image lazy loading
+- Code health docs: `docs/technical-audit.md` — long-term maintained codebase reference
 
 **v1.3.0** (2026-08)
 - Onboarding system: auto-triggered on first visit, SVG mask capsule cutout highlights target elements with spring transitions, 6 steps covering import → open book → page turn → settings → compendium → bookmarks
