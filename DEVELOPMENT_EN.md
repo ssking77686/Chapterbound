@@ -36,9 +36,9 @@ src/
 ├── engines/        # Reading engine (EpubEngine)
 ├── parsers/        # Metadata parser (EpubParser)
 ├── features/       # Feature plugins (reserved extension points)
-├── stores/         # Zustand stores (7 independent stores)
+├── stores/         # Zustand stores (8 independent stores)
 ├── hooks/          # React hooks (useReader, useKeyboard, useTheme)
-├── components/     # UI components (LibraryPage, ReaderPage, AboutOverlay)
+├── components/     # UI components (LibraryPage, ReaderPage, OnboardingOverlay, AboutOverlay, ErrorBoundary, ToastContainer)
 └── plugins/        # App startup wiring (default-plugins)
 ```
 
@@ -54,7 +54,7 @@ Plugin-based design — engines, parsers, storage, and feature modules all regis
 
 ### State Management (Zustand)
 
-Seven independent stores:
+Eight independent stores:
 
 | Store | Responsibility |
 |-------|---------------|
@@ -65,6 +65,7 @@ Seven independent stores:
 | `settingsStore` | Reader settings + page theme + compendium font scale, persisted to localStorage |
 | `compendiumStore` | Compendium import/load/unlock/search |
 | `onboardingStore` | Onboarding guide state, localStorage persistence, cross-page navigation |
+| `toastStore` | Toast notifications: success/error/info, auto-dismiss |
 
 ### Design System
 
@@ -91,6 +92,7 @@ Powered by motion/react, three spring presets:
 - **epub.js types**: 5 `as any` casts in `EpubEngine.ts` and `EpubParser.ts`. epub.js v0.3.93 TypeScript definitions are incomplete — `currentLocation()` return value and `metadata` properties are untyped.
 - **Feature plugins are skeletons**: The 4 plugins under `src/features/` register lifecycle hooks but have no UI extensions. The plugin system is wired but unused.
 - **EPUB only**: No PDF or TXT engine yet; `registry.getEngine()` returns `undefined` for non-EPUB formats.
+- **Related docs**: `docs/technical-audit.md` — code health reference: error handling conventions, persistence details, risk inventory, module navigation index.
 
 ### Key Patterns
 

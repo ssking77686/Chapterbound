@@ -36,9 +36,9 @@ src/
 ├── engines/        # 阅读引擎（EpubEngine）
 ├── parsers/        # 元数据解析器（EpubParser）
 ├── features/       # 功能插件（预留扩展点）
-├── stores/         # Zustand store（7 个独立 store）
+├── stores/         # Zustand store（8 个独立 store）
 ├── hooks/          # React hooks（useReader, useKeyboard, useTheme）
-├── components/     # UI 组件（LibraryPage, ReaderPage, AboutOverlay）
+├── components/     # UI 组件（LibraryPage, ReaderPage, OnboardingOverlay, AboutOverlay, ErrorBoundary, ToastContainer）
 └── plugins/        # 应用启动注册（default-plugins）
 ```
 
@@ -54,7 +54,7 @@ src/
 
 ### 状态管理 (Zustand)
 
-七 个独立 store：
+八 个独立 store：
 
 | Store | 职责 |
 |-------|------|
@@ -65,6 +65,7 @@ src/
 | `settingsStore` | 阅读器设置 + 页面主题 + 图鉴字号，持久化到 localStorage |
 | `compendiumStore` | 图鉴导入/加载/解锁/搜索 |
 | `onboardingStore` | 入门引导状态，localStorage 持久化，跨页面导航 |
+| `toastStore` | Toast 通知：success/error/info 三类型，auto-dismiss |
 
 ### 设计系统
 
@@ -91,6 +92,7 @@ motion/react 提供，三套 spring 配置：
 - **epub.js 类型**：`EpubEngine.ts` 和 `EpubParser.ts` 中有 5 处 `as any` 转换。epub.js v0.3.93 的 TypeScript 定义不完整，`currentLocation()` 返回值和 `metadata` 属性未类型化。
 - **功能插件是骨架**：`src/features/` 下的 4 个插件注册了生命周期钩子但没有 UI 扩展。插件系统已接线但未使用。
 - **仅支持 EPUB**：尚无 PDF 或 TXT 引擎，`registry.getEngine()` 对非 EPUB 格式返回 `undefined`。
+- **相关文档**：`docs/technical-audit.md` — 代码健康档案：错误处理惯例、数据持久化细节、风险清单、模块导航索引。
 
 ### 关键模式
 
