@@ -28,16 +28,6 @@ class ReaderDB extends Dexie {
     this.version(2).stores({
       compendium: 'id, bookId, category',
     })
-
-    this.on('error', (err) => {
-      console.error('[IndexedDB] 数据库异常:', err)
-    })
-    this.on('blocked', () => {
-      console.warn('[IndexedDB] 数据库升级被阻塞——可能存在其他标签页持有旧连接')
-    })
-    this.on('versionchange', () => {
-      console.warn('[IndexedDB] 检测到数据库版本变更')
-    })
   }
 }
 
