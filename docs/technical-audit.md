@@ -4,7 +4,7 @@
 >
 > **维护原则：** 记录模式而非行号（行号会过时），解释"为什么是问题"让未来维护者自行判断是否仍然适用。
 >
-> **最近更新：** 2026-08-11 — P0/P1/P2 风险大部分已修复，详见 §4 标注。
+> **最近更新：** 2026-08-11 — P0/P1/P2 风险大部分已修复，图鉴渲染性能已优化，详见 §4 标注。
 
 ---
 
@@ -185,6 +185,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | 图鉴 JSON 导入无运行时结构校验 | 缺失字段导致渲染/search 时崩溃 | `compendiumStore.validateImportData` | 已修复 |
 | localStorage 设置无类型校验 | 非法类型值流入 DOM | `settingsStore.load()` | 已修复 |
 | `settingsStore.save()` 无 try/catch | QuotaExceededError 穿透到事件处理器 | `settingsStore.save()` | 已修复 |
+| 图鉴列表无上限渲染 | 条目多时全部 DOM 节点 + 图片一次性渲染，stagger 动画 `delay: i * 0.04` 线性增长导致界面假死 | `ReaderPage.tsx` 图鉴面板 | 已修复：搜索防抖（>50条 150ms）、无限滚动（每批 50）、动画延迟上限 0.5s、图片懒加载、关联计数 useMemo |
 
 ### 4.2 数据完整性风险
 
