@@ -25,6 +25,7 @@ interface CompendiumState {
 }
 
 function scoreEntry(entry: CompendiumEntry, query: string): number {
+  if (!entry?.name || !query) return 0
   const q = query.toLowerCase()
   let score = 0
 
@@ -34,13 +35,13 @@ function scoreEntry(entry: CompendiumEntry, query: string): number {
   else if (entry.name.toLowerCase().includes(q)) { score += 50 }
 
   // 别名匹配
-  for (const alias of entry.aliases) {
+  for (const alias of entry.aliases ?? []) {
     if (alias === query) { score += 60 }
     else if (alias.toLowerCase().includes(q)) { score += 30 }
   }
 
   // 描述匹配
-  if (entry.description.toLowerCase().includes(q)) { score += 10 }
+  if (typeof entry.description === 'string' && entry.description.toLowerCase().includes(q)) { score += 10 }
 
   return score
 }
@@ -81,6 +82,7 @@ function validateImportData(json: CompendiumImportData): CompendiumImportData {
     monsters: (json.monsters ?? []).map(validateItem),
   }
 }
+
 export const useCompendiumStore = create<CompendiumState>((set, get) => ({
   entries: [],
   currentChapter: 0,
@@ -114,9 +116,10 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
 
   importFromJSON: async (bookId: string, json: CompendiumImportData, readerChapter?: number) => {
     const storage = registry.getStorage()
+    const validated = validateImportData(json)
     // 优先用阅读器传入的当前章节，fallback 到 store 内存中的值
     const effectiveChapter = readerChapter ?? get().currentChapter
-    await storage.importCompendium(bookId, validateImportData(json))
+    await storage.importCompendium(bookId, validated)
     await get().loadCompendium(bookId)
     if (effectiveChapter > 0) {
       get().checkUnlock(effectiveChapter)

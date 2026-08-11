@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useBookshelfStore } from '../stores/bookshelfStore'
+import { useToastStore } from '../stores/toastStore'
 import { BookOpen, Trash2, Plus, Sun, Moon, ImageIcon, Undo2, Info } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { AboutOverlay } from './AboutOverlay'
@@ -56,15 +57,24 @@ export function LibraryPage({ onOpenBook }: Props) {
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    await importBook(file)
+    try {
+      await importBook(file)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '导入失败'
+      useToastStore.getState().toast(msg, 'error')
+    }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleRemove = (id: string) => {
     setRemovingIds((prev) => new Set(prev).add(id))
     pendingRemovals.current.add(id)
-    setTimeout(() => {
-      removeBook(id)
+    setTimeout(async () => {
+      try {
+        await removeBook(id)
+      } catch {
+        useToastStore.getState().toast('删除失败', 'error')
+      }
       setRemovingIds((prev) => {
         const next = new Set(prev)
         next.delete(id)

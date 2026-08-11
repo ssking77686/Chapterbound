@@ -12,6 +12,7 @@ export interface IStorageAdapter {
 
   saveFileData(bookId: string, data: ArrayBuffer): Promise<void>
   getFileData(bookId: string): Promise<ArrayBuffer | null>
+  deleteFileData(bookId: string): Promise<void>
 
   getUsageInfo(): Promise<{ used: number; quota: number }>
 

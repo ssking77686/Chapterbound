@@ -29,6 +29,7 @@
   "build": {
     "appId": "com.ereader.app",
     "productName": "Chapterbound",
+    "electronDist": "electron-dist",
     "directories": {
       "output": "release"
     },

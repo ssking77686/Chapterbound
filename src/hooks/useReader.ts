@@ -35,6 +35,7 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
       try {
         // 监听器必须在 load() 之前注册——load() 内部会触发 relocated 和 ready 事件
         engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
+          // 节流进度保存：最多每秒写一次，快速翻页时排队尾次
           const now = Date.now()
           if (now - lastSaveRef.current >= 1000) {
             lastSaveRef.current = now

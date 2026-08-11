@@ -37,7 +37,7 @@ export class EpubEngine implements IReaderEngine {
       const progress = this.computeProgress(cfi)
       const page = location.start.displayed.page
       const total = location.start.displayed.total
-      console.log('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
+      // console.debug('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
       this.emit('locationChange', cfi, progress, page, total, location.start.index)
     })
 
