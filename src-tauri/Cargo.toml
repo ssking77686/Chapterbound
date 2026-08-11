@@ -1,6 +1,6 @@
 [package]
 name = "电子阅读器"
-version = "1.2.0"
+version = "1.3.2"
 description = "沉浸式 EPUB 电子书阅读器"
 authors = ["ahine Yang"]
 license = "MIT"
