@@ -3,6 +3,8 @@
 > 长期维护的代码健康参考文档。覆盖错误处理惯例、数据持久化细节、已知风险模式、代码库导航索引。适合新贡献者快速了解代码库的边界情况和潜在问题。
 >
 > **维护原则：** 记录模式而非行号（行号会过时），解释"为什么是问题"让未来维护者自行判断是否仍然适用。
+>
+> **最近更新：** 2026-08-11 — P0/P1/P2 风险大部分已修复，详见 §4 标注。
 
 ---
 
@@ -176,34 +178,34 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 
 ### 4.1 崩溃风险（可能导致白屏或应用不可用）
 
-| 风险 | 为什么是问题 | 涉及模块 | 修复方向 |
-|------|-------------|---------|---------|
-| 无 React Error Boundary | 任何渲染期异常 → 整棵树卸载 → 白屏 | `main.tsx`（App 挂载点） | 添加 Error Boundary 组件包裹 `<App/>` |
-| 无 unhandledrejection 处理 | 所有未 catch 的异步异常静默丢失，用户和开发者都不知道 | 全局 | `main.tsx` 中注册 `window.addEventListener('unhandledrejection', ...)` |
-| 图鉴 JSON 导入无运行时结构校验 | `importFromJSON` 接受任意 JSON，若字段缺失（如 `description`），数据写入后会在渲染/search 时因调用缺失字段的方法而崩溃 | `compendiumStore.importFromJSON`、`IndexedDBAdapter.importCompendium`、`compendiumStore.searchEntries` | 导入时校验必填字段，对缺失字段填默认值 |
-| localStorage 设置无类型校验 | `settingsStore.load()` 中 `JSON.parse` 的结果直接 spread，若存储非对象值（旧版残留），`fontSize` 等字段类型错误流入 DOM | `settingsStore.load()` | 解析后校验类型，对非法值回退默认值 |
-| `settingsStore.save()` 无 try/catch | `localStorage.setItem` 的 QuotaExceededError 会穿透 `updateSettings` 抛到事件处理器 | `settingsStore.save()` | 包裹 try/catch，失败时降级（设置仅在内存中生效） |
+| 风险 | 为什么是问题 | 涉及模块 | 状态 |
+|------|-------------|---------|------|
+| 无 React Error Boundary | 任何渲染期异常 → 整棵树卸载 → 白屏 | `ErrorBoundary.tsx` + `main.tsx` | 已修复 |
+| 无 unhandledrejection 处理 | 所有未 catch 的异步异常静默丢失 | `main.tsx` | 已修复 |
+| 图鉴 JSON 导入无运行时结构校验 | 缺失字段导致渲染/search 时崩溃 | `compendiumStore.validateImportData` | 已修复 |
+| localStorage 设置无类型校验 | 非法类型值流入 DOM | `settingsStore.load()` | 已修复 |
+| `settingsStore.save()` 无 try/catch | QuotaExceededError 穿透到事件处理器 | `settingsStore.save()` | 已修复 |
 
 ### 4.2 数据完整性风险
 
-| 风险 | 为什么是问题 | 涉及模块 | 修复方向 |
-|------|-------------|---------|---------|
-| `deleteBook` 无事务 | 6 步独立写入，若第 3 步失败：前 2 步已删、后 4 步未删 → 数据不一致 | `IndexedDBAdapter.deleteBook` | 用 `Dexie.transaction()` 包裹 |
-| `importCompendium` 无事务 | 先 delete 再 bulkPut，若 delete 成功但 bulkPut 失败 → 该书的图鉴永久丢失（直到下次成功导入） | `IndexedDBAdapter.importCompendium` | 用事务包裹 delete + bulkPut + kvDelete |
-| `importBook` 两步非原子 | 先 `saveFileData` 再 `saveBook`，第一步成功第二步失败 → 文件二进制无关联记录 | `bookshelfStore.importBook` | 合并为事务或失败时回滚清理 |
-| 翻页进度写入无错误处理 | 每次翻页触发 `saveProgress`，不 await 不 catch → 写入失败是 unhandled rejection，进度静默丢失 | `useReader` 中 relocated 事件处理函数 | 添加 `.catch()` 至少打日志；考虑节流 |
-| Dexie 无错误回调 | `db.on('error')` 未注册，IndexedDB 异常（如 quota 超限）无法追踪 | `IndexedDBAdapter` 构造函数 | 注册 `on('error')` 回调，至少 console.warn |
+| 风险 | 为什么是问题 | 涉及模块 | 状态 |
+|------|-------------|---------|------|
+| `deleteBook` 无事务 | 6 步独立写入，中途失败 → 数据不一致 | `IndexedDBAdapter.deleteBook` | 已修复：用 `db.transaction()` 包裹 |
+| `importCompendium` 无事务 | delete 成功但 bulkPut 失败 → 图鉴永久丢失 | `IndexedDBAdapter.importCompendium` | 已修复：用事务包裹 |
+| `importBook` 两步非原子 | saveFileData 成功但 saveBook 失败 → 孤儿文件 | `bookshelfStore.importBook` | 已修复：catch 中调用 deleteFileData 回滚 |
+| 翻页进度写入无错误处理 | 每次翻页 saveProgress，不 await 不 catch | `useReader` relocated 事件 | 已修复：加节流（1s）+ `.catch()` |
+| Dexie 无错误回调 | IndexedDB 异常无法追踪 | — | 已撤销：Dexie 4.x 构造函数中 `db.on()` 不可用，`unhandledrejection` 兜底 |
 
 ### 4.3 静默失效风险
 
-| 风险 | 为什么是问题 | 涉及模块 |
-|------|-------------|---------|
-| `App.tsx` 中 `ensureTestData` 吞错 | 测试书播种失败（fetch 404、配额不足等）→ 引导永远不显示，无提示 | `App.tsx` |
-| `LibraryPage` 操作无错误反馈 | `importBook`/`removeBook`/`updateCover` 失败 → UI 不动，用户以为操作没触发 | `LibraryPage` 事件处理函数 |
-| 书签/高亮加载无错误处理 | `ReaderPage` 中 `loadBookmarks`/`loadHighlights` 无 catch → 加载失败时列表一直为空 | `ReaderPage` useEffect |
-| `useReader` 中 `loadCompendium` 吞错 | 图鉴加载失败 → 图鉴面板一直显示空数据，用户不知道是加载失败还是真的没数据 | `useReader` |
-| `bookshelfStore.importBook` 元数据解析失败静默降级 | EPUB 解析失败 → 用文件名当标题，用户不知道封面和元数据出了问题 | `bookshelfStore.importBook` |
-| `EpubEngine` 调试日志残留 | 每次翻页打印 `console.log('[EpubEngine] relocated spineIndex:', ...)` | `EpubEngine` |
+| 风险 | 为什么是问题 | 涉及模块 | 状态 |
+|------|-------------|---------|------|
+| `App.tsx` 中 `ensureTestData` 吞错 | 测试书播种失败 → 引导永远不显示，无提示 | `App.tsx` | 已修复：加 `console.warn` |
+| `LibraryPage` 操作无错误反馈 | importBook/removeBook 失败 → UI 不动 | `LibraryPage` | 已修复：加 toast.error |
+| 书签/高亮加载无错误处理 | 加载失败时列表一直为空 | `ReaderPage` useEffect | 保持静默（非关键路径，不打扰用户） |
+| `useReader` 中 `loadCompendium` 吞错 | 图鉴加载失败 → 空数据 | `useReader` | 保持静默（非关键路径） |
+| `bookshelfStore.importBook` 元数据解析失败静默降级 | EPUB 解析失败用文件名当标题 | `bookshelfStore.importBook` | 设计如此（降级可用优于报错） |
+| `EpubEngine` 调试日志残留 | 每次翻页打印 console.log | `EpubEngine.ts` | 已修复：已注释 |
 
 ---
 
@@ -230,6 +232,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/stores/settingsStore.ts` | 阅读设置：字体/行高/主题/图鉴缩放，持久化 localStorage | `useSettingsStore` |
 | `src/stores/compendiumStore.ts` | 图鉴：导入/搜索/章节解锁/条目管理 | `useCompendiumStore` |
 | `src/stores/onboardingStore.ts` | 引导：步骤状态、localStorage 持久化、跨页面导航 | `useOnboardingStore` |
+| `src/stores/toastStore.ts` | Toast 通知：auto-dismiss、success/error/info 三类型 | `useToastStore` |
 | `src/hooks/useReader.ts` | 阅读器核心 hook：引擎生命周期、进度/图鉴联动 | `useReader` |
 | `src/hooks/useTheme.ts` | 主题 hook：明暗切换 | `useTheme` |
 | `src/hooks/useKeyboard.ts` | 键盘快捷键 hook | `useKeyboard` |
@@ -237,6 +240,8 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/components/ReaderPage.tsx` | 阅读器页面：渲染区 + 设置/书签/高亮/图鉴/目录侧边栏 | `ReaderPage` |
 | `src/components/OnboardingOverlay.tsx` | 引导覆盖层：9 步引导、高亮定位、跳过/永久关闭 | `OnboardingOverlay` |
 | `src/components/AboutOverlay.tsx` | 关于页面：项目信息、贡献者 | `AboutOverlay` |
+| `src/components/ErrorBoundary.tsx` | React 错误边界：捕获渲染期异常，显示友好恢复页面 | `ErrorBoundary` |
+| `src/components/ToastContainer.tsx` | Toast 通知容器：固定顶部居中，motion 动画进出 | `ToastContainer` |
 | `src/data/project-info.ts` | 项目元数据：名称、版本、仓库地址、贡献者 | `projectInfo` |
 | `electron/main.cjs` | Electron 主进程：BrowserWindow 创建、dev/prod 模式切换 | — |
 | `src-tauri/src/lib.rs` | Tauri Rust 后端：WebView 配置、debug 日志插件 | — |
@@ -277,6 +282,14 @@ EpubEngine: rendition.on('relocated', ...)
 ReaderPage 设置面板 onChange
   → settingsStore.updateSettings({ fontSize: 18 })
     → save(next) → localStorage.setItem('ereader-settings', JSON.stringify(next))
+```
+
+**错误反馈流程：**
+```
+组件 catch 异常
+  → useToastStore.getState().toast(msg, 'error')
+    → toastStore 写入 toast 条目 → auto-dismiss 定时器
+    → ToastContainer（AnimatePresence）渲染/动画/退出
 ```
 
 ### 5.3 常见修改场景导航
