@@ -9,6 +9,7 @@ import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settin
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore'
+import { useToastStore } from '../stores/toastStore'
 import type { TOCItem } from '../core/types'
 import { PAGE_THEME_PRESETS } from '../data/themes'
 
@@ -56,7 +57,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [compendiumSearch, setCompendiumSearch] = useState('')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
   const searchEntries = useCompendiumStore((s) => s.searchEntries)
-  const [importMsg, setImportMsg] = useState('')
   const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
   const [selResults, setSelResults] = useState<SearchResult[] | null>(null)
 
@@ -209,12 +209,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
         const text = await file.text()
         const json = JSON.parse(text)
         await compendiumImport(bookId, json, getCurrentChapter())
-        setImportMsg('导入成功')
-        setTimeout(() => setImportMsg(''), 2000)
+        useToastStore.getState().toast('导入成功', 'success')
       } catch (e) {
         console.error('[import] failed:', e)
-        setImportMsg('导入失败，请检查 JSON 格式')
-        setTimeout(() => setImportMsg(''), 3000)
+        useToastStore.getState().toast('导入失败，请检查 JSON 格式', 'error', 4000)
       }
       input.remove()
     }
@@ -1035,16 +1033,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
                               >
                                 使用说明
                               </a>
-                              {importMsg && (
-                                <motion.p
-                                  className="text-xs"
-                                  initial={{ opacity: 0, y: 4 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  style={{ color: importMsg.includes('失败') ? 'var(--color-danger)' : 'var(--color-accent)' }}
-                                >
-                                  {importMsg}
-                                </motion.p>
-                              )}
                             </div>
                           )
                         }

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { LibraryPage } from './components/LibraryPage'
 import { ReaderPage } from './components/ReaderPage'
 import { OnboardingOverlay } from './components/OnboardingOverlay'
+import { ToastContainer } from './components/ToastContainer'
 import { useOnboardingStore } from './stores/onboardingStore'
 import { useBookshelfStore } from './stores/bookshelfStore'
 import { registry } from './core/registry'
@@ -62,7 +63,9 @@ export default function App() {
     if (!dismissed) {
       ensureTestData().then(() => {
         startOnboarding()
-      }).catch(() => {})
+      }).catch((err) => {
+        console.warn('[App] 测试数据播种失败，引导不会启动:', err)
+      })
     }
   }, [dismissed, startOnboarding])
 
@@ -101,6 +104,7 @@ export default function App() {
       </AnimatePresence>
 
       {!dismissed && isActive && <OnboardingOverlay />}
+      <ToastContainer />
     </>
   )
 }
