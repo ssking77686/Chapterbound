@@ -14,6 +14,8 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
   const engineRef = useRef<EpubEngine | null>(null)
   const chapterMapRef = useRef<Map<number, number>>(new Map())
   const lastChapterRef = useRef(0)
+  const lastSaveRef = useRef(0)
+  const pendingSaveRef = useRef<ReturnType<typeof setTimeout>>()
   const saveProgress = useProgressStore((s) => s.saveProgress)
   const loadProgress = useProgressStore((s) => s.loadProgress)
   const [pageInfo, setPageInfo] = useState<PageInfo>({ current: 0, total: 0 })
@@ -33,7 +35,18 @@ export function useReader(bookId: string, containerRef: React.RefObject<HTMLDivE
       try {
         // 监听器必须在 load() 之前注册——load() 内部会触发 relocated 和 ready 事件
         engine.on('locationChange', (loc: unknown, prog: unknown, page?: unknown, total?: unknown, spineIndex?: unknown) => {
-          saveProgress(bookId, loc as string, prog as number)
+          // 节流进度保存：最多每秒写一次，快速翻页时排队尾次
+          const now = Date.now()
+          if (now - lastSaveRef.current >= 1000) {
+            lastSaveRef.current = now
+            saveProgress(bookId, loc as string, prog as number).catch(() => {})
+          } else {
+            clearTimeout(pendingSaveRef.current)
+            pendingSaveRef.current = setTimeout(() => {
+              lastSaveRef.current = Date.now()
+              saveProgress(bookId, loc as string, prog as number).catch(() => {})
+            }, 500)
+          }
           if (typeof page === 'number' && typeof total === 'number') {
             setPageInfo({ current: page, total })
           }

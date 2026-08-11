@@ -28,6 +28,16 @@ class ReaderDB extends Dexie {
     this.version(2).stores({
       compendium: 'id, bookId, category',
     })
+
+    this.on('error', (err) => {
+      console.error('[IndexedDB] 数据库异常:', err)
+    })
+    this.on('blocked', () => {
+      console.warn('[IndexedDB] 数据库升级被阻塞——可能存在其他标签页持有旧连接')
+    })
+    this.on('versionchange', () => {
+      console.warn('[IndexedDB] 检测到数据库版本变更')
+    })
   }
 }
 
@@ -60,12 +70,17 @@ export class IndexedDBAdapter implements IStorageAdapter {
   }
 
   async deleteBook(id: string): Promise<void> {
-    await this.db.books.delete(id)
-    await this.db.files.delete(id)
-    await this.db.bookmarks.where('bookId').equals(id).delete()
-    await this.db.highlights.where('bookId').equals(id).delete()
-    await this.db.readingProgress.delete(id)
-    await this.db.compendium.where('bookId').equals(id).delete()
+    await this.db.transaction('rw', [
+      this.db.books, this.db.files, this.db.bookmarks,
+      this.db.highlights, this.db.readingProgress, this.db.compendium,
+    ], async () => {
+      await this.db.books.delete(id)
+      await this.db.files.delete(id)
+      await this.db.bookmarks.where('bookId').equals(id).delete()
+      await this.db.highlights.where('bookId').equals(id).delete()
+      await this.db.readingProgress.delete(id)
+      await this.db.compendium.where('bookId').equals(id).delete()
+    })
   }
 
   // 文件二进制存储
@@ -76,6 +91,10 @@ export class IndexedDBAdapter implements IStorageAdapter {
   async getFileData(bookId: string): Promise<ArrayBuffer | null> {
     const record = await this.db.files.get(bookId)
     return record?.data ?? null
+  }
+
+  async deleteFileData(bookId: string): Promise<void> {
+    await this.db.files.delete(bookId)
   }
 
   // 书签
@@ -172,10 +191,12 @@ export class IndexedDBAdapter implements IStorageAdapter {
       updatedAt: now,
     }))
     // 先清空旧数据再写入，避免重新导入时残留已删除条目
-    await this.db.compendium.where('bookId').equals(bookId).delete()
-    await this.db.compendium.bulkPut(entries)
-    // 重置章节进度，避免新数据被旧进度批量解锁
-    await this.db.kvStore.delete(`compendium:chapter:${bookId}`)
+    await this.db.transaction('rw', [this.db.compendium, this.db.kvStore], async () => {
+      await this.db.compendium.where('bookId').equals(bookId).delete()
+      await this.db.compendium.bulkPut(entries)
+      // 重置章节进度，避免新数据被旧进度批量解锁
+      await this.db.kvStore.delete(`compendium:chapter:${bookId}`)
+    })
   }
 
   // 图鉴章节进度（按 bookId 隔离，存 kvStore）
