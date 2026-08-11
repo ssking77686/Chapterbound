@@ -25,6 +25,7 @@ interface CompendiumState {
 }
 
 function scoreEntry(entry: CompendiumEntry, query: string): number {
+  if (!entry?.name || !query) return 0
   const q = query.toLowerCase()
   let score = 0
 
@@ -34,15 +35,50 @@ function scoreEntry(entry: CompendiumEntry, query: string): number {
   else if (entry.name.toLowerCase().includes(q)) { score += 50 }
 
   // 别名匹配
-  for (const alias of entry.aliases) {
+  for (const alias of entry.aliases ?? []) {
     if (alias === query) { score += 60 }
     else if (alias.toLowerCase().includes(q)) { score += 30 }
   }
 
   // 描述匹配
-  if (entry.description.toLowerCase().includes(q)) { score += 10 }
+  if (typeof entry.description === 'string' && entry.description.toLowerCase().includes(q)) { score += 10 }
 
   return score
+}
+
+/** 运行时校验导入的图鉴数据，阻止脏数据进入 IndexedDB */
+function validateImportData(json: CompendiumImportData): CompendiumImportData {
+  const validCategories = new Set(['character', 'location', 'monster'])
+  const validateItem = (item: Record<string, unknown>) => {
+    if (!item || typeof item !== 'object') {
+      throw new Error('导入数据格式错误：条目不是有效对象')
+    }
+    if (typeof item.id !== 'string' || !item.id.trim()) {
+      throw new Error('导入数据格式错误：条目缺少 id')
+    }
+    if (typeof item.name !== 'string' || !item.name.trim()) {
+      throw new Error(`导入数据格式错误：条目 "${String(item.id)}" 缺少 name`)
+    }
+    return {
+      ...item,
+      name: item.name,
+      id: item.id,
+      category: validCategories.has(item.category as string) ? item.category : 'character',
+      description: typeof item.description === 'string' ? item.description : '',
+      aliases: Array.isArray(item.aliases) ? item.aliases : [],
+      history: typeof item.history === 'string' ? item.history : '',
+      image: typeof item.image === 'string' ? item.image : undefined,
+      relations: Array.isArray(item.relations) ? item.relations : [],
+      quotations: Array.isArray(item.quotations) ? item.quotations : [],
+      entries: Array.isArray(item.entries) ? item.entries : [],
+    }
+  }
+
+  return {
+    characters: (json.characters ?? []).map(validateItem),
+    locations: (json.locations ?? []).map(validateItem),
+    monsters: (json.monsters ?? []).map(validateItem),
+  }
 }
 
 export const useCompendiumStore = create<CompendiumState>((set, get) => ({
@@ -78,9 +114,10 @@ export const useCompendiumStore = create<CompendiumState>((set, get) => ({
 
   importFromJSON: async (bookId: string, json: CompendiumImportData, readerChapter?: number) => {
     const storage = registry.getStorage()
+    const validated = validateImportData(json)
     // 优先用阅读器传入的当前章节，fallback 到 store 内存中的值
     const effectiveChapter = readerChapter ?? get().currentChapter
-    await storage.importCompendium(bookId, json)
+    await storage.importCompendium(bookId, validated)
     await get().loadCompendium(bookId)
     if (effectiveChapter > 0) {
       get().checkUnlock(effectiveChapter)
