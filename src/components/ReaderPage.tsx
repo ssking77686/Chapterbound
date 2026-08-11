@@ -57,6 +57,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [compendiumSearch, setCompendiumSearch] = useState('')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
   const searchEntries = useCompendiumStore((s) => s.searchEntries)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [visibleCount, setVisibleCount] = useState(50)
   const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
   const [selResults, setSelResults] = useState<SearchResult[] | null>(null)
 
@@ -74,6 +76,32 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [cardScope, cardAnimate] = useAnimate()
   const [bookmarkScope, bookmarkAnimate] = useAnimate()
   const { toggle: toggleTheme, isDark } = useTheme()
+
+  // 分类/搜索变更时重置可见数量
+  useEffect(() => {
+    setVisibleCount(50)
+  }, [debouncedSearch, compendiumCategory])
+
+  // 搜索防抖：条目 ≤50 即时响应，>50 延迟 150ms
+  useEffect(() => {
+    if (compendiumEntries.length <= 50) {
+      setDebouncedSearch(compendiumSearch)
+      return
+    }
+    const timer = setTimeout(() => setDebouncedSearch(compendiumSearch), 150)
+    return () => clearTimeout(timer)
+  }, [compendiumSearch, compendiumEntries.length])
+
+  // 关联计数缓存，详情弹窗中避免每次渲染都 O(N×R) 扫描
+  const globalRefCount = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of compendiumEntries) {
+      for (const r of e.relations) {
+        map.set(r.targetId, (map.get(r.targetId) ?? 0) + 1)
+      }
+    }
+    return map
+  }, [compendiumEntries])
 
   const handleNext = useCallback(() => {
     turnDirection.current = 1
@@ -977,7 +1005,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   {/* 条目列表 */}
                   <div className="flex-1 overflow-y-auto px-4 pb-4">
                     {(() => {
-                      const searchQuery = compendiumSearch.trim()
+                      const searchQuery = debouncedSearch.trim()
                       const filtered = searchQuery
                         ? searchEntries(searchQuery, compendiumCategory)
                         : getEntriesByCategory(compendiumCategory).map((e) => ({ entry: e, score: 0 }))
@@ -1064,75 +1092,94 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           </div>
                         )
                       }
-                      return filtered.map(({ entry }, i) => {
-                        const unlockedCount = (entry.entries ?? []).filter((r) => r.unlocked).length
-                        const totalCount = (entry.entries ?? []).length
-                        return (
-                          <motion.button
-                            key={entry.id}
-                            className="mb-2 flex w-full items-center gap-3 rounded-xl p-2.5 text-left"
-                            style={{
-                              background: 'var(--color-card)',
-                              boxShadow: 'var(--shadow-card)',
-                            }}
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ ...springDefault, delay: i * 0.04 }}
-                            whileHover={{ y: -1, boxShadow: 'var(--shadow-float)' }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleShowEntryDetail(entry.id)}
-                          >
-                            <div
-                              className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
-                              style={{ background: 'var(--color-separator)' }}
-                            >
-                              {entry.image ? (
-                                <img src={entry.image} alt={entry.name} className="h-full w-full object-cover" />
-                              ) : (
-                                entry.category === 'character' ? <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
-                                entry.category === 'location' ? <MapPin className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
-                                <Skull className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p
-                                className="truncate text-[0.9375rem] font-medium"
-                                style={{ color: 'var(--color-text)' }}
+                      const visible = filtered.slice(0, visibleCount)
+                      return (
+                        <>
+                          {visible.map(({ entry }, i) => {
+                            const unlockedCount = (entry.entries ?? []).filter((r) => r.unlocked).length
+                            const totalCount = (entry.entries ?? []).length
+                            return (
+                              <motion.button
+                                key={entry.id}
+                                className="mb-2 flex w-full items-center gap-3 rounded-xl p-2.5 text-left"
+                                style={{
+                                  background: 'var(--color-card)',
+                                  boxShadow: 'var(--shadow-card)',
+                                }}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ ...springDefault, delay: Math.min(i * 0.04, 0.5) }}
+                                whileHover={{ y: -1, boxShadow: 'var(--shadow-float)' }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => handleShowEntryDetail(entry.id)}
                               >
-                                {entry.name}
-                              </p>
-                              <p
-                                className="truncate text-[0.8125rem]"
-                                style={{ color: 'var(--color-text-secondary)' }}
-                              >
-                                {entry.description}
-                              </p>
-                            </div>
-                            <div className="flex flex-shrink-0 items-center gap-1">
-                              <span
-                                className="text-xs font-medium"
-                                style={{ color: 'var(--color-text-secondary)' }}
-                              >
-                                {unlockedCount}/{totalCount}
-                              </span>
-                              {totalCount > 0 && (
                                 <div
-                                  className="h-1 w-8 overflow-hidden rounded-full"
+                                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
                                   style={{ background: 'var(--color-separator)' }}
                                 >
-                                  <div
-                                    className="h-full rounded-full transition-all duration-500"
-                                    style={{
-                                      width: `${(unlockedCount / totalCount) * 100}%`,
-                                      background: 'var(--color-accent)',
-                                    }}
-                                  />
+                                  {entry.image ? (
+                                    <img src={entry.image} alt={entry.name} className="h-full w-full object-cover" loading="lazy" />
+                                  ) : (
+                                    entry.category === 'character' ? <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
+                                    entry.category === 'location' ? <MapPin className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
+                                    <Skull className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </motion.button>
-                        )
-                      })
+                                <div className="min-w-0 flex-1">
+                                  <p
+                                    className="truncate text-[0.9375rem] font-medium"
+                                    style={{ color: 'var(--color-text)' }}
+                                  >
+                                    {entry.name}
+                                  </p>
+                                  <p
+                                    className="truncate text-[0.8125rem]"
+                                    style={{ color: 'var(--color-text-secondary)' }}
+                                  >
+                                    {entry.description}
+                                  </p>
+                                </div>
+                                <div className="flex flex-shrink-0 items-center gap-1">
+                                  <span
+                                    className="text-xs font-medium"
+                                    style={{ color: 'var(--color-text-secondary)' }}
+                                  >
+                                    {unlockedCount}/{totalCount}
+                                  </span>
+                                  {totalCount > 0 && (
+                                    <div
+                                      className="h-1 w-8 overflow-hidden rounded-full"
+                                      style={{ background: 'var(--color-separator)' }}
+                                    >
+                                      <div
+                                        className="h-full rounded-full transition-all duration-500"
+                                        style={{
+                                          width: `${(unlockedCount / totalCount) * 100}%`,
+                                          background: 'var(--color-accent)',
+                                        }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.button>
+                            )
+                          })}
+                          {filtered.length > visibleCount && (
+                            <motion.button
+                              className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium"
+                              style={{
+                                color: 'var(--comp-accent, #C9A96E)',
+                                border: '1px dashed var(--comp-separator)',
+                              }}
+                              whileHover={{ background: 'var(--comp-card)' }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setVisibleCount((v) => v + 50)}
+                            >
+                              加载更多 ({filtered.length - visibleCount})
+                            </motion.button>
+                          )}
+                        </>
+                      )
                     })()}
                     {/* 底部常驻入口 — 有数据后仍然可见 */}
                     {compendiumEntries.length > 0 && (
@@ -1619,12 +1666,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   </h3>
                   <div className="flex flex-wrap gap-1.5">
                     {(() => {
-                      const globalRefCount = new Map<string, number>()
-                      for (const e of compendiumEntries) {
-                        for (const r of e.relations) {
-                          globalRefCount.set(r.targetId, (globalRefCount.get(r.targetId) ?? 0) + 1)
-                        }
-                      }
                       const sorted = [...detailEntry.relations].sort((a, b) => {
                         const aTarget = getEntryById(a.targetId)
                         const bTarget = getEntryById(b.targetId)
