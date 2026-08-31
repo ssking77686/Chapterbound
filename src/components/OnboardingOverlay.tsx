@@ -4,6 +4,7 @@ import { ScrollText, User, MapPin, BookOpen } from 'lucide-react'
 import { useOnboardingStore } from '../stores/onboardingStore'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { steps } from '../data/onboardingSteps'
+import { useIsTouch } from '../hooks/useIsTouch'
 
 const CARD_W = 300
 const WELCOME_CARD_W = 480
@@ -84,8 +85,18 @@ export function OnboardingOverlay() {
   const advance = useOnboardingStore((s) => s.advance)
   const dismissForever = useOnboardingStore((s) => s.dismissForever)
   const booksCount = useBookshelfStore((s) => s.books.length)
+  const isTouch = useIsTouch()
 
-  const step = steps[currentStep]
+  const baseStep = steps[currentStep]
+  // 触屏下翻页按钮被手势接管而隐藏（page-turn-right 不再渲染）→ 该步骤改指阅读区并改文案
+  const step = isTouch && baseStep.id === 'page-turn'
+    ? {
+        ...baseStep,
+        target: 'page-area',
+        placement: 'bottom' as const,
+        description: '轻点屏幕右侧翻下一页、左侧翻上一页，左右滑动也可翻页。',
+      }
+    : baseStep
   const hasSpotlight = step.target !== ''
 
   const [targetRect, setTargetRect] = useState<Cutout | null>(null)
@@ -119,7 +130,14 @@ export function OnboardingOverlay() {
     let raf = 0
     const track = () => {
       const r = getTargetRect(step.target)
-      if (r) setTargetRect(r)
+      if (r) {
+        // 浅比较：目标未移动时跳过 setState，避免每帧触发 rerender
+        setTargetRect((prev) =>
+          prev && prev.x === r.x && prev.y === r.y && prev.width === r.width && prev.height === r.height
+            ? prev
+            : r,
+        )
+      }
       raf = requestAnimationFrame(track)
     }
     track()
@@ -166,9 +184,11 @@ export function OnboardingOverlay() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // 窄屏（<480px）下非居中卡片强制 bottom，避免与 target 重叠
+  const effectivePlacement = !isCentered && windowSize.w < 480 ? 'bottom' : step.placement
   const cardPos = isCentered
     ? { x: (windowSize.w - cardW) / 2, y: isWelcome ? windowSize.h * 0.35 : 24 }
-    : getCardPos(targetRect, step.placement, cardHeight)
+    : getCardPos(targetRect, effectivePlacement, cardHeight)
 
   return (
     <div className="fixed inset-0" style={{ zIndex: 100, pointerEvents: 'none' }}>
@@ -332,7 +352,7 @@ export function OnboardingOverlay() {
             <div className="flex flex-col items-center gap-2">
               <motion.button
                 className="rounded-full px-8 py-3 text-base font-semibold text-white"
-                style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)' }}
+                style={{ background: 'var(--color-accent)', boxShadow: '0 4px 16px rgba(184,124,75,0.35)', minHeight: isTouch ? 44 : undefined }}
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
@@ -342,7 +362,7 @@ export function OnboardingOverlay() {
               </motion.button>
               <button
                 className="text-xs opacity-50 hover:opacity-80 transition-opacity"
-                style={{ color: 'var(--color-text-secondary)' }}
+                style={{ color: 'var(--color-text-secondary)', minHeight: isTouch ? 44 : undefined }}
                 onClick={dismissForever}
               >
                 不再显示引导
@@ -352,7 +372,7 @@ export function OnboardingOverlay() {
             currentStep === 4 ? (
               <motion.button
                 className="rounded-full px-5 py-2 text-sm font-semibold text-white"
-                style={{ background: 'var(--color-accent)' }}
+                style={{ background: 'var(--color-accent)', minHeight: isTouch ? 44 : undefined }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
@@ -363,7 +383,7 @@ export function OnboardingOverlay() {
             ) : (
               <motion.button
                 className="rounded-full px-4 py-2 text-xs font-medium"
-                style={{ color: 'var(--color-text-secondary)', background: 'transparent' }}
+                style={{ color: 'var(--color-text-secondary)', background: 'transparent', minHeight: isTouch ? 44 : undefined }}
                 whileHover={{ background: 'rgba(60,50,38,0.06)' }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
@@ -393,7 +413,7 @@ export function OnboardingOverlay() {
           <motion.div
             className="overflow-hidden"
             style={{
-              width: 400,
+              width: Math.min(400, windowSize.w - 32),
               background: 'var(--color-card)',
               borderRadius: 20,
               boxShadow: '0 16px 48px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)',

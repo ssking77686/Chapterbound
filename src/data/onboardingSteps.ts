@@ -19,7 +19,7 @@ export const steps: OnboardingStep[] = [
     target: 'import-button',
     placement: 'bottom',
     title: '导入你的第一本书',
-    description: '点击这里导入 EPUB 电子书，支持 .epub / .pdf / .txt 格式。书架会帮你管理所有的阅读进度。',
+    description: '点击这里导入 EPUB 电子书。书架会帮你管理所有的阅读进度。',
   },
   {
     id: 'about-project',

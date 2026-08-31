@@ -12,6 +12,7 @@ import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore
 import { useToastStore } from '../stores/toastStore'
 import type { TOCItem } from '../core/types'
 import { PAGE_THEME_PRESETS } from '../data/themes'
+import { useIsTouch } from '../hooks/useIsTouch'
 
 interface Props {
   bookId: string
@@ -69,6 +70,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [relationsExpanded, setRelationsExpanded] = useState(false)
+  const isTouch = useIsTouch()
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnDirection = useRef(0)
   const pageInfoRef = useRef(pageInfo)
@@ -170,11 +172,78 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setSelResults(null)
   }, [pageKey])
 
+  const toolbarVisibleRef = useRef(true)
+  useEffect(() => {
+    toolbarVisibleRef.current = toolbarVisible
+  }, [toolbarVisible])
+
   const resetHideTimer = useCallback(() => {
     setToolbarVisible(true)
     if (hideTimer.current) clearTimeout(hideTimer.current)
     hideTimer.current = setTimeout(() => setToolbarVisible(false), 3000)
   }, [])
+
+  // tap 中央：切换工具栏显隐（与 resetHideTimer 相反的方向）
+  const toggleToolbar = useCallback(() => {
+    if (toolbarVisibleRef.current) {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+      setToolbarVisible(false)
+    } else {
+      resetHideTimer()
+    }
+  }, [resetHideTimer])
+
+  // ── Android 返回键逐层退出（popstate 阶段；Phase 3 由 Capacitor backButton 叠加） ──
+  // 覆盖层栈：图鉴详情 > 侧栏 > 阅读器。popstate 处理器只读 ref，不依赖闭包捕获的 state。
+  const sidebarTabRef = useRef(sidebarTab)
+  const detailEntryIdRef = useRef(detailEntryId)
+  useEffect(() => { sidebarTabRef.current = sidebarTab }, [sidebarTab])
+  useEffect(() => { detailEntryIdRef.current = detailEntryId }, [detailEntryId])
+
+  const closeTopOverlay = useCallback(() => {
+    if (detailEntryIdRef.current !== null) {
+      setDetailEntryId(null)
+      setSidebarTab('compendium')
+    } else if (sidebarTabRef.current !== null) {
+      setSidebarTab(null)
+    } else {
+      onBack()
+    }
+  }, [onBack])
+
+  useEffect(() => {
+    history.pushState({ reader: true }, '')
+    const onPopState = () => closeTopOverlay()
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      // 卸载后清除 reader 标记，避免残留条目上的 popstate 误触发
+      if (history.state?.reader) history.replaceState(null, '')
+    }
+  }, [closeTopOverlay])
+
+  // 触屏手势订阅（B 类：事件仅由触屏环境下的引擎注册后才会发出）
+  useEffect(() => {
+    const engine = getEngine()
+    if (!engine || pageInfo.total === 0) return
+    const onSwipe = (...args: unknown[]) => {
+      const dir = args[0] as string
+      if (dir === 'left') handleNext()
+      else if (dir === 'right') handlePrev()
+    }
+    const onTap = (...args: unknown[]) => {
+      const { xRatio } = args[0] as { xRatio: number }
+      if (xRatio < 0.3) handlePrev()
+      else if (xRatio > 0.7) handleNext()
+      else toggleToolbar()
+    }
+    engine.on('gesture:swipe', onSwipe)
+    engine.on('gesture:tap', onTap)
+    return () => {
+      engine.off('gesture:swipe', onSwipe)
+      engine.off('gesture:tap', onTap)
+    }
+  }, [getEngine, pageInfo.total, handleNext, handlePrev, toggleToolbar])
 
   useEffect(() => {
     return () => {
@@ -188,17 +257,23 @@ export function ReaderPage({ bookId, onBack }: Props) {
     return loc ? getBookmarkAt(loc) : undefined
   }, [currentLocation, getBookmarkAt])
 
+  // 打开侧栏：记录返回键栈条目（Android back 逐层退出）
+  const openSidebar = useCallback((tab: 'toc' | 'bookmarks' | 'compendium' | 'settings') => {
+    setSidebarTab(tab)
+    history.pushState({ overlay: true }, '')
+  }, [])
+
   const handleBookmarkClick = useCallback(() => {
     const loc = currentLocation()
     if (!loc) return
     const existing = getBookmarkAt(loc)
     if (existing) {
       // 已有书签 → 打开书签列表
-      setSidebarTab('bookmarks')
+      openSidebar('bookmarks')
       return
     }
     setPickerOpen((p) => !p)
-  }, [currentLocation, getBookmarkAt])
+  }, [currentLocation, getBookmarkAt, openSidebar])
 
   const handlePickColor = useCallback(async (color: string) => {
     const loc = currentLocation()
@@ -218,7 +293,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
     if (!engine) return
     const items = await engine.getTOC()
     setToc(items)
-    setSidebarTab('toc')
+    openSidebar('toc')
   }
 
   const handleSettingsChange = (patch: Partial<typeof settings>) => {
@@ -253,6 +328,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setDetailEntryId(id)
     setSidebarTab(null)
     setRelationsExpanded(false)
+    history.pushState({ overlay: true }, '')
   }, [])
 
   const toolbarBg = 'var(--color-toolbar)'
@@ -271,7 +347,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
   return (
     <div
-      className="relative flex h-screen flex-col"
+      className="reader-touch relative flex h-screen flex-col"
       style={{ background: 'var(--color-page-bg)' }}
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
@@ -283,6 +359,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           background: toolbarBg,
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
+          paddingTop: 'calc(0.5rem + var(--safe-top))',
         }}
         animate={{
           opacity: toolbarVisible ? 1 : 0.3,
@@ -291,7 +368,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       >
         <motion.button
           onClick={onBack}
-          className="rounded-full p-2.5"
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -352,8 +429,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       key={c.value}
                       className="rounded-full"
                       style={{
-                        width: 22,
-                        height: 22,
+                        width: isTouch ? 32 : 22,
+                        height: isTouch ? 32 : 22,
                         background: c.value,
                         boxShadow: `0 0 0 2px var(--color-card), 0 2px 8px ${c.value}40`,
                       }}
@@ -374,8 +451,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   <motion.button
                     className="flex items-center justify-center rounded-full"
                     style={{
-                      width: 22,
-                      height: 22,
+                      width: isTouch ? 32 : 22,
+                      height: isTouch ? 32 : 22,
                       background: 'var(--color-card)',
                       border: '1px solid var(--color-separator)',
                     }}
@@ -394,7 +471,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         </div>
         <motion.button
           onClick={toggleTheme}
-          className="rounded-full p-2.5"
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -405,7 +482,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         </motion.button>
         <motion.button
           onClick={handleShowToc}
-          className="rounded-full p-2.5"
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -418,7 +495,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           onClick={async () => {
             await compendiumLoad(bookId)
             compendiumMarkViewed()
-            setSidebarTab('compendium')
+            openSidebar('compendium')
           }}
           className="relative rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
@@ -447,8 +524,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           })()}
         </motion.button>
         <motion.button
-          onClick={() => setSidebarTab('settings')}
-          className="rounded-full p-2.5"
+          onClick={() => openSidebar('settings')}
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -503,6 +580,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
           onMouseLeave={() => setHoveredEdge(null)}
           onClick={(e) => {
+            // 触屏翻页由引擎手势（gesture:tap/swipe）接管，避免与 click 双重翻页
+            if (isTouch) return
             const relX = e.clientX - e.currentTarget.getBoundingClientRect().left
             const mid = e.currentTarget.clientWidth / 2
             if (relX < mid) handlePrev()
@@ -530,7 +609,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             </div>
           )}
 
-          <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
+          <div ref={containerRef} className="reader-touch h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
 
           {/* 选中文字检索浮窗 */}
           {selData && !selResults && (
@@ -645,18 +724,21 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         getEngine()?.goToLocation(bm.location)
                       }}
                       aria-label={`跳转到书签：${bm.label}`}
+                      style={isTouch ? { padding: 12 } : undefined}
                     >
                       <span
                         className="block rounded-full opacity-30 transition-opacity duration-200 group-hover/dot:opacity-100"
                         style={{
-                          width: 8,
-                          height: 8,
+                          width: isTouch ? 12 : 8,
+                          height: isTouch ? 12 : 8,
                           background: bm.color,
                           boxShadow: `0 0 6px ${bm.color}60`,
+                          opacity: isTouch ? 0.85 : undefined,
                         }}
                       />
+                      {/* 触屏下不显示 label（无 hover，且右侧空间宝贵） */}
                       <span
-                        className="pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium group-hover/dot:inline-block"
+                        className={`pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium group-hover/dot:inline-block ${isTouch ? 'hidden' : ''}`}
                         style={{
                           background: toolbarBg,
                           backdropFilter: toolbarBlur,
@@ -688,25 +770,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
               : 'linear-gradient(to right, rgba(184,124,75,0.08), transparent)',
           }}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'left' ? 1 : 0.4,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'left' ? 1 : 0.4,
           }}
           transition={{ duration: 0.35 }}
         />
 
-        {/* 左翻页按钮 — 全高长条 */}
+        {/* 左翻页按钮 — 全高长条（触屏下隐藏，由手势接管） */}
         <motion.button
           onClick={handlePrev}
           className="absolute left-2 z-10 flex items-center justify-center rounded-2xl px-1"
           style={{
             top: 8,
             bottom: 8,
+            pointerEvents: isTouch ? 'none' : 'auto',
             ...navButtonClass,
           }}
           whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
           whileTap={{ scale: 0.96 }}
           transition={springDefault}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'left' ? 0.85 : 0.2,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'left' ? 0.85 : 0.2,
           }}
           aria-label="上一页"
         >
@@ -725,25 +808,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
               : 'linear-gradient(to left, rgba(184,124,75,0.08), transparent)',
           }}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 1 : 0.4,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'right' ? 1 : 0.4,
           }}
           transition={{ duration: 0.35 }}
         />
 
-        {/* 右翻页按钮 — 全高长条 */}
+        {/* 右翻页按钮 — 全高长条（触屏下隐藏，由手势接管） */}
         <motion.button
           onClick={handleNext}
           className="absolute right-2 z-10 flex items-center justify-center rounded-2xl px-1"
           style={{
             top: 8,
             bottom: 8,
+            pointerEvents: isTouch ? 'none' : 'auto',
             ...navButtonClass,
           }}
           whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
           whileTap={{ scale: 0.96 }}
           transition={springDefault}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
           }}
           aria-label="下一页"
           data-onboarding-id="page-turn-right"
@@ -758,8 +842,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
       <AnimatePresence>
         {pageInfo.total > 0 && (
           <motion.div
-            className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2"
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2"
             key={pageKey}
+            style={{ bottom: 'calc(1.5rem + var(--safe-bottom))' }}
             initial={{ y: 6, opacity: 0, scale: 0.9 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -6, opacity: 0 }}
@@ -795,16 +880,17 @@ export function ReaderPage({ bookId, onBack }: Props) {
               onClick={() => setSidebarTab(null)}
             />
             <motion.nav
-              className="w-72 overflow-y-auto"
+              className={`${isTouch ? 'w-full max-w-[420px]' : 'w-72'} overflow-y-auto`}
               style={{
                 background: toolbarBg,
                 backdropFilter: toolbarBlur,
                 WebkitBackdropFilter: toolbarBlur,
                 borderLeft: '1px solid var(--color-separator)',
+                paddingBottom: 'var(--safe-bottom)',
               }}
-              initial={{ x: 288 }}
+              initial={{ x: '100%' }}
               animate={{ x: 0 }}
-              exit={{ x: 288 }}
+              exit={{ x: '100%' }}
               transition={springSlide}
             >
               {/* Tab 栏 */}
@@ -815,7 +901,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 {sidebarTabs.map((tab) => (
                   <button
                     key={tab.key}
-                    className="relative flex-1 pb-3 text-sm font-medium transition-colors"
+                    className={`relative flex-1 pb-3 text-sm font-medium transition-colors ${isTouch ? 'min-h-11' : ''}`}
                     style={{
                       color: sidebarTab === tab.key ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     }}
@@ -926,7 +1012,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             </p>
                           </button>
                           <motion.button
-                            className="flex-shrink-0 rounded-full p-2.5"
+                            className="icon-btn flex-shrink-0 rounded-full p-2.5"
                             whileHover={{ scale: 1.15 }}
                             whileTap={{ scale: 0.9 }}
                             transition={springPress}
@@ -1596,7 +1682,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
               <div className="h-6" />
             )}
 
-            <div className="mx-auto w-full max-w-2xl px-5 pb-10 min-[1800px]:max-w-[1300px]" style={{ zoom: settings.compendiumFontScale }}>
+            <div
+              className="mx-auto w-full max-w-2xl px-5 min-[1800px]:max-w-[1300px]"
+              style={{ zoom: settings.compendiumFontScale, paddingBottom: 'calc(2.5rem + var(--safe-bottom))' }}
+            >
               {/* 名字 */}
               <h1
                 className="text-2xl font-bold tracking-tight"
