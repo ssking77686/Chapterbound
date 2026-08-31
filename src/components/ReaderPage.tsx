@@ -180,18 +180,24 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const resetHideTimer = useCallback(() => {
     setToolbarVisible(true)
     if (hideTimer.current) clearTimeout(hideTimer.current)
+    // 触屏设备常显工具栏：自动渐隐会让按钮视觉消失、且呼出依赖 tap 区域判断，手机上容易找不到
+    if (isTouch) return
     hideTimer.current = setTimeout(() => setToolbarVisible(false), 3000)
-  }, [])
+  }, [isTouch])
 
-  // tap 中央：切换工具栏显隐（与 resetHideTimer 相反的方向）
+  // tap 中央：触屏常显下只确保显示（不隐藏）；桌面切换显隐（与 resetHideTimer 相反的方向）
   const toggleToolbar = useCallback(() => {
+    if (isTouch) {
+      resetHideTimer()
+      return
+    }
     if (toolbarVisibleRef.current) {
       if (hideTimer.current) clearTimeout(hideTimer.current)
       setToolbarVisible(false)
     } else {
       resetHideTimer()
     }
-  }, [resetHideTimer])
+  }, [isTouch, resetHideTimer])
 
   // ── Android 返回键逐层退出（popstate 阶段；Phase 3 由 Capacitor backButton 叠加） ──
   // 覆盖层栈：图鉴详情 > 侧栏 > 阅读器。popstate 处理器只读 ref，不依赖闭包捕获的 state。
@@ -914,6 +920,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 backdropFilter: toolbarBlur,
                 WebkitBackdropFilter: toolbarBlur,
                 borderLeft: '1px solid var(--color-separator)',
+                paddingTop: 'var(--safe-top)',
                 paddingBottom: 'var(--safe-bottom)',
               }}
               initial={{ x: '100%' }}
@@ -921,9 +928,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
               exit={{ x: '100%' }}
               transition={springSlide}
             >
-              {/* Tab 栏 */}
+              {/* Tab 栏 + 关闭按钮 */}
               <div
-                className="flex border-b px-5 pt-5 pb-0"
+                className="flex items-center border-b px-5 pt-5 pb-0"
                 style={{ borderColor: 'var(--color-separator)' }}
               >
                 {sidebarTabs.map((tab) => (
@@ -947,6 +954,21 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     )}
                   </button>
                 ))}
+                {/* 显式关闭按钮：手机上没有 hover 遮罩提示，需要可见的退出入口 */}
+                <motion.button
+                  onClick={() => {
+                    setSidebarTab(null)
+                    history.replaceState({ reader: true }, '')
+                  }}
+                  className="icon-btn mb-2 ml-1 flex-shrink-0 rounded-full"
+                  whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+                  whileTap={{ scale: 0.94 }}
+                  transition={springPress}
+                  style={{ color: 'var(--color-text)' }}
+                  aria-label="关闭侧栏"
+                >
+                  <X className="h-5 w-5" />
+                </motion.button>
               </div>
 
               {/* 目录面板 */}
@@ -1609,6 +1631,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 background: 'rgba(60, 46, 36, 0.85)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
+                // 独立全屏浮层：顶部避开状态栏/刘海，否则返回键和字号键落入防误触区
+                paddingTop: 'calc(0.5rem + var(--safe-top))',
               }}
             >
               <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-3">

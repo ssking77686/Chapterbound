@@ -19,6 +19,16 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* 触屏保底：Android WebView 的 env() 恒为 0。原生 MainActivity 注入真实高度时会同时写入
+   data-safe-top-injected 标记（此规则随即失效，由注入值精确控制位置）；仅当注入失败时
+   才启用 16px 保底，避免工具栏落入状态栏防误触区。桌面 hover:hover 不匹配，无感。 */
+@media (hover: none) {
+  :root:not([data-safe-top-injected]) {
+    --safe-top: max(env(safe-area-inset-top, 0px), 16px);
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
+}
+
 html {
   transition: background-color 0.3s ease, color 0.3s ease;
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 15+（API 35/36）对 targetSdk 35+ 强制 edge-to-edge：
+         WebView 内容铺到状态栏后面，顶部工具栏落入刘海/状态栏防误触死区无法点击。
+         windowOptOutEdgeToEdgeEnforcement 是官方豁免开关——恢复传统布局，
+         内容自动从状态栏下方开始。阅读器不需要沉浸式，豁免是最可控的修复。 -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <item name="android:statusBarColor">@color/statusBarLight</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
