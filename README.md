@@ -60,6 +60,17 @@
 
 ---
 
+## 平台
+
+| 平台 | 方式 |
+|------|------|
+| 浏览器 | `npm run dev` 或部署 `dist/` 静态目录 |
+| Windows 桌面 | Electron（`npm run electron:build`，产出 EXE 安装包） |
+| 桌面（可选） | Tauri v2（`npm run tauri`） |
+| Android 手机 | Capacitor 封装，一键打包 APK，侧载分发（见下方命令） |
+
+同一份代码三种壳分发，行为一致。Android 端额外获得：**滑动 / 轻点翻页**、状态栏安全区适配（工具栏自动避开刘海/防误触区）、44px 触屏命中区、返回键逐层退出。
+
 ## 快速开始
 
 ```bash
@@ -67,6 +78,10 @@ npm install
 npm run dev      # 开发服务器
 npm run build    # 生产构建
 npm run lint     # 代码检查
+
+# Android APK（需 JDK 21 + Android SDK，详见开发者文档）
+npx cap sync android
+cd android && ./gradlew assembleDebug   # 产物：android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
@@ -83,6 +98,15 @@ npm run lint     # 代码检查
 ---
 
 ## 更新日志
+
+**v1.4.0** (2026-08)
+- 移动端适配：Capacitor 8 封装，可打包 Android APK 侧载分发
+- 触屏翻页：左右滑动翻页、轻点屏幕两侧翻页（与长按选词互不冲突）
+- 状态栏适配：工具栏自动避开刘海/防误触区，原生注入安全区高度，深/浅色状态栏跟随主题
+- 侧栏全屏化：手机上侧栏占满屏宽，独立关闭按钮，返回键逐层退出（详情 → 侧栏 → 书架）
+- 触屏交互补全：书架删除/封面按钮常显、44px 统一命中区、引导卡片按屏宽自动缩放
+- 应用图标：Android 图标与 EXE 同款（深棕底 + 红色书本）
+- 导入收敛：仅支持 EPUB 格式，其他格式明确提示（修复此前可导入但打不开的问题）
 
 **v1.3.2** (2026-08)
 - 安全加固：React Error Boundary 捕获渲染崩溃、unhandledrejection 全局处理器、IndexedDB 事务化写入防数据不一致

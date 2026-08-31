@@ -16,6 +16,7 @@
 | 渲染 | epub.js |
 | 动效 | motion (formerly framer-motion) |
 | 图标 | Lucide |
+| 移动端壳 | Capacitor 8（Android WebView 封装，生成 APK） |
 
 ## 开发命令
 
@@ -25,7 +26,18 @@ npm run dev       # 开发服务器（默认 http://localhost:5173）
 npm run build     # tsc -b + vite build
 npm run preview   # 预览生产构建
 npm run lint      # oxlint 代码检查
+
+# Android（APK 构建）
+npx cap sync android        # 把 dist/ 复制进 android/app/src/main/assets/public + 同步原生配置
+cd android && ./gradlew assembleDebug   # 构建 debug APK（产物：android/app/build/outputs/apk/debug/app-debug.apk）
+
+# 桌面壳
+npm run electron:dev        # Electron 开发模式
+npm run electron:build      # 打包 Windows EXE（输出到 release/，离线使用 electron-dist/ 本地运行时）
+npm run tauri               # Tauri CLI
 ```
+
+> **Android 构建环境**（见下文「移动端适配」）：JDK 21 + Android SDK（platform 36、build-tools 34.0.0）。国内网络需配置 Maven/Gradle 镜像（`~/.gradle/init.gradle` + `android/gradle/wrapper/gradle-wrapper.properties`），`android/local.properties` 的 `sdk.dir` 必须用正斜杠（`sdk.dir=C:/android-sdk`，反斜杠会被 Java Properties 转义吞掉）。
 
 ## 目录结构
 
@@ -33,13 +45,16 @@ npm run lint      # oxlint 代码检查
 src/
 ├── core/           # 共享类型、ServiceRegistry 单例、五大抽象接口
 ├── adapters/       # 存储适配器（IndexedDBAdapter）
-├── engines/        # 阅读引擎（EpubEngine）
+├── engines/        # 阅读引擎（EpubEngine，含触屏手势事件）
 ├── parsers/        # 元数据解析器（EpubParser）
 ├── features/       # 功能插件（预留扩展点）
 ├── stores/         # Zustand store（8 个独立 store）
-├── hooks/          # React hooks（useReader, useKeyboard, useTheme）
+├── hooks/          # React hooks（useReader, useKeyboard, useTheme, useIsTouch）
 ├── components/     # UI 组件（LibraryPage, ReaderPage, OnboardingOverlay, AboutOverlay, ErrorBoundary, ToastContainer）
 └── plugins/        # 应用启动注册（default-plugins）
+
+android/            # Capacitor Android 工程（Gradle；由 cap sync 管理）
+capacitor.config.ts # Capacitor 配置（appId: com.chapterbound.app，webDir: dist）
 ```
 
 ## 架构
@@ -86,12 +101,34 @@ motion/react 提供，三套 spring 配置：
 - `springPress`: bounce 0, duration 0.2s（按钮点击反馈）
 - `springSlide`: bounce 0.15, duration 0.3s（侧栏滑入）
 
+### 移动端适配（Capacitor Android）
+
+同一份 Web 应用通过三种壳分发：Electron / Tauri（桌面）、Capacitor WebView（Android APK）。移动端适配的几条关键机制：
+
+**触屏判定（单源）** — `useIsTouch`：`matchMedia('(hover: none), (pointer: coarse)')` 自动检测，`localStorage['force-touch']='1'/'0'` 可强制覆盖（调试用，无 UI 入口）。全应用不散落 matchMedia。
+
+**翻页手势（引擎级）** — `EpubEngine` 在 iframe 的 `contents` 上绑定 touch 事件（epub.js 会把 iframe 内 DOM 事件转发出来），发出 `gesture:swipe`（|dx|≥60px、|dx|>2|dy|、≤600ms）和 `gesture:tap`（≤350ms、≤10px 位移）事件；长按选词（selection 非空）时抑制翻页。桌面端不注册手势，零影响。
+
+**安全区注入（原生桥接）** — Android WebView 的 `env(safe-area-inset-*)` 恒为 0。`android/app/src/main/java/com/chapterbound/app/MainActivity.java` 启动时读取真实状态栏高度（WindowInsets），注入为 CSS 变量 `--safe-top`（页面未就绪自动重试），工具栏/侧栏/图鉴详情据此下移避开状态栏与刘海防误触区。CSS 侧 `@media (hover: none)` 有 16px 保底，仅在注入失败（无 `data-safe-top-injected` 标记）时生效。`index.css` 中 `--safe-top`/`--safe-bottom` 的桌面值为 0，桌面零回归。
+
+**edge-to-edge** — Android 15/16 对 targetSdk 35+ 强制 edge-to-edge，会让 WebView 内容铺到状态栏后面。`android/app/src/main/res/values-v35/styles.xml` 用 `windowOptOutEdgeToEdgeEnforcement` 豁免（配合原生注入双保险），状态栏颜色与 Web 主题色对齐（`values-night-v35` 深色变体）。
+
+**返回键逐层退出** — `ReaderPage` 用单条目 `history.replaceState` 方案：打开侧栏/图鉴详情/书签选择器只更新条目 state（不新增历史），popstate 时按 refs 分发关闭覆盖层（图鉴详情 → 侧栏 → 阅读器），关掉覆盖层后重新压回条目。历史栈恒为两条，返回键语义稳定。（Phase 3 预留 Capacitor `@capacitor/app` backButton 事件叠加。）
+
+**Android 构建环境备忘**：
+- JDK 21（`JAVA_HOME` 必须指向 Windows 绝对路径，unix 风格路径对 .bat 无效）
+- Android SDK：`C:/android-sdk`（platforms/android-36 + build-tools/34.0.0 + platform-tools + cmdline-tools）
+- 国内镜像：`~/.gradle/init.gradle` 注入腾讯云 nexus maven-public + Google 官方 + 阿里云后备；`gradle-wrapper.properties` 的 distributionUrl 用腾讯云 gradle 镜像
+- **修改 web 代码后必须** `npm run build && npx cap sync android` 再 `assembleDebug`，否则 APK 里是旧 web 产物
+
 ### 已知问题
 
 - **epub.js 分页**：部分书籍只显示 1-2 页。EPUB 引擎通过 CSS columns 渲染，初始渲染时若容器高度为 0，columns 会坍缩。`useReader` 中的 ResizeObserver 处理了 post-render resize，但初始渲染时序敏感。
 - **epub.js 类型**：`EpubEngine.ts` 和 `EpubParser.ts` 中有 5 处 `as any` 转换。epub.js v0.3.93 的 TypeScript 定义不完整，`currentLocation()` 返回值和 `metadata` 属性未类型化。
 - **功能插件是骨架**：`src/features/` 下的 4 个插件注册了生命周期钩子但没有 UI 扩展。插件系统已接线但未使用。
-- **仅支持 EPUB**：尚无 PDF 或 TXT 引擎，`registry.getEngine()` 对非 EPUB 格式返回 `undefined`。
+- **仅支持 EPUB**：尚无 PDF 或 TXT 引擎，`registry.getEngine()` 对非 EPUB 格式返回 `undefined`。导入已收敛为仅 `.epub`（含校验，拒绝其他格式并 toast 提示）。
+- **Android WebView 持久化**：IndexedDB 数据存于 WebView 应用数据目录，卸载/清数据会丢失（本阶段未做备份导出）。
+- **Android 待办（Phase 3+）**：intent-filter 导入（SAF 当前为系统文件选择器回退）、`@capacitor/app` 返回键接入、release 签名、真机选区检索重设计、移动端图鉴工作流（已决策砍掉）。
 - **相关文档**：`docs/technical-audit.md` — 代码健康档案：错误处理惯例、数据持久化细节、风险清单、模块导航索引。
 
 ### 关键模式
