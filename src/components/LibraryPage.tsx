@@ -57,6 +57,12 @@ export function LibraryPage({ onOpenBook }: Props) {
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (ext !== 'epub') {
+      useToastStore.getState().toast('仅支持 EPUB 格式', 'error')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
     try {
       await importBook(file)
     } catch (err) {
@@ -105,6 +111,7 @@ export function LibraryPage({ onOpenBook }: Props) {
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
           boxShadow: scrolled ? '0 1px 0 0 var(--color-separator)' : 'none',
+          paddingTop: 'calc(0.75rem + var(--safe-top))',
         }}
       >
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-2">
@@ -151,7 +158,7 @@ export function LibraryPage({ onOpenBook }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".epub,.pdf,.txt"
+              accept=".epub"
               onChange={handleImport}
               className="hidden"
             />
@@ -247,7 +254,7 @@ export function LibraryPage({ onOpenBook }: Props) {
                             />
                           </div>
                         )}
-                        <div className="absolute right-1.5 bottom-1.5 hidden gap-1 group-hover:flex">
+                        <div className="hover-reveal absolute right-1.5 bottom-1.5 gap-1">
                           <motion.button
                             className="rounded-full p-2"
                             style={{
@@ -307,7 +314,7 @@ export function LibraryPage({ onOpenBook }: Props) {
                     </motion.div>
                     {/* 删除按钮 */}
                     <motion.button
-                      className="absolute right-3 top-3 hidden rounded-full p-2 group-hover:flex items-center justify-center"
+                      className="hover-reveal absolute right-3 top-3 items-center justify-center rounded-full p-2"
                       style={{
                         background: 'var(--color-card)',
                         boxShadow: 'var(--shadow-float)',

@@ -4,7 +4,7 @@
 >
 > **维护原则：** 记录模式而非行号（行号会过时），解释"为什么是问题"让未来维护者自行判断是否仍然适用。
 >
-> **最近更新：** 2026-08-11 — P0/P1/P2 风险大部分已修复，图鉴渲染性能已优化，详见 §4 标注。
+> **最近更新：** 2026-08-31 — 移动端适配（Capacitor Android 分发），新增 §7 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
 
 ---
 
@@ -43,6 +43,7 @@
 - **启动阶段：** `main.tsx` 的 `initializeApp().catch()` 是唯一的全局守卫——仅在 IndexedDB 完全不可用时显示"应用启动失败"
 - **运行时 Promise：** 大量 store 方法（`loadBooks`、`importBook`、`removeBook`、`updateCover`、`loadBookmarks`、`loadHighlights`）在组件中直接调用，**没有 `.catch()`**，失败会变成 unhandled rejection
 - **Fire-and-forget：** 翻页进度保存（`useReader` 中每次 `relocated` 事件触发 `saveProgress`）既不 await 也不 catch，是最高频的无保护异步写入
+- **全局兜底（v1.3.2+）：** `main.tsx` 注册 `unhandledrejection` 处理器——未 catch 的 rejection 记录 `console.error` 并弹 toast，不再静默丢失。兜底能防崩溃级问题，但不替代调用点错误处理（无法区分哪次写入失败）
 
 ### 1.4 TypeScript 严格度
 
@@ -137,15 +138,15 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 |------|---------|------------|
 | `main.tsx` 启动失败 | IndexedDB 完全不可用 | 全屏静态提示："应用启动失败 / 请检查浏览器是否启用了 IndexedDB 存储" |
 | `ReaderPage` 加载失败 | 书籍引擎初始化失败 | 内联提示："加载失败：{错误原文}" + "返回书架"按钮 |
-| `ReaderPage` JSON 导入 | 图鉴 JSON 导入失败 | 红色文字："导入失败，请检查 JSON 格式"（3 秒消失） |
-| `ReaderPage` JSON 导入成功 | 图鉴 JSON 导入成功 | 绿色文字："导入成功"（2 秒消失） |
+| `ToastContainer`（v1.3.2+） | 全局 toast：导入/删除/非法格式/进度条拖拽错误 | 顶部居中胶囊：success/error/info 三类型，motion 动画，auto-dismiss；移动端自动换行 + `max-width: calc(100vw-32px)` |
+| `ErrorBoundary`（v1.3.2+） | 任何渲染期异常 | 友好恢复页面（不再白屏），含"重试"操作 |
+| `unhandledrejection` 处理器（v1.3.2+） | 未 catch 的异步 Promise 异常 | `console.error` 记录 + toast 提示（`main.tsx` 全局兜底） |
 
-**不存在的通用组件：**
-- 没有 Toast / Snackbar / Notification 组件
-- 没有 Modal 确认/错误对话框
-- 没有 React Error Boundary（渲染崩溃 → 白屏）
-- 没有 `unhandledrejection` 全局处理器
-- 没有 `aria-live` / `role="alert"` 无障碍错误提示
+**Toast 使用惯例：** 用户操作的成败反馈走 `useToastStore.getState().toast(msg, type, duration)`；`duration <= 0` 永久停留（仅限重要错误）。翻页/图鉴解锁等高频非关键路径**不用** toast——保持静默降级（见 §1.1）。
+
+**仍缺失的通用组件（已知缺口）：**
+- 没有 Modal 确认/错误对话框（删除书籍等破坏性操作无二次确认）
+- 没有 `aria-live` / `role="alert"` 无障碍错误提示（触屏朗读场景会漏掉 toast）
 
 ### 3.2 各页面的加载态/空态/错误态覆盖
 
@@ -162,15 +163,14 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 
 ### 3.3 日志现状
 
-整个 `src/` 仅 5 处 `console.*` 调用：
+整个 `src/` 仅 4 处 `console.*` 调用：
 
 | 级别 | 数量 | 说明 |
 |------|------|------|
-| `console.log` | 1 | EpubEngine 每次翻页打印 spineIndex（调试残留） |
-| `console.warn` | 2 | 引擎/解析器被重复注册时警告 |
-| `console.error` | 2 | 图鉴 JSON 导入失败、启动失败 |
+| `console.warn` | 2 | 引擎/解析器被重复注册时警告、测试数据播种失败 |
+| `console.error` | 2 | 图鉴 JSON 导入失败、unhandledrejection 全局处理器（v1.3.2+） |
 
-没有日志工具类、没有分级、没有生产环境日志过滤。
+没有日志工具类、没有分级、没有生产环境日志过滤。Android 调试可看 `adb logcat` 的 WebView console（debug 构建默认输出）。
 
 ---
 
@@ -237,6 +237,9 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/hooks/useReader.ts` | 阅读器核心 hook：引擎生命周期、进度/图鉴联动 | `useReader` |
 | `src/hooks/useTheme.ts` | 主题 hook：明暗切换 | `useTheme` |
 | `src/hooks/useKeyboard.ts` | 键盘快捷键 hook | `useKeyboard` |
+| `src/hooks/useIsTouch.ts` | 触屏检测唯一来源：`matchMedia('(hover: none), (pointer: coarse)')`，`localStorage['force-touch']` 调试覆盖 | `useIsTouch`, `detectTouch` |
+| `src/engines/EpubEngine.ts`（手势部分） | 触屏手势：`gesture:swipe` / `gesture:tap` 事件（仅触屏注册，桌面零注册） | `EpubEngine` 事件订阅 |
+| `src/index.css`（移动端段） | `--safe-top/--safe-bottom` 变量、触屏保底（16px，注入失败时）、`.hover-reveal` / `.icon-btn` / `.reader-touch` 工具类 | CSS 变量与类 |
 | `src/components/LibraryPage.tsx` | 书架页面：书籍列表、导入/删除/封面操作 | `LibraryPage` |
 | `src/components/ReaderPage.tsx` | 阅读器页面：渲染区 + 设置/书签/高亮/图鉴/目录侧边栏 | `ReaderPage` |
 | `src/components/OnboardingOverlay.tsx` | 引导覆盖层：9 步引导、高亮定位、跳过/永久关闭 | `OnboardingOverlay` |
@@ -246,6 +249,9 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/data/project-info.ts` | 项目元数据：名称、版本、仓库地址、贡献者 | `projectInfo` |
 | `electron/main.cjs` | Electron 主进程：BrowserWindow 创建、dev/prod 模式切换 | — |
 | `src-tauri/src/lib.rs` | Tauri Rust 后端：WebView 配置、debug 日志插件 | — |
+| `capacitor.config.ts` | Capacitor 配置：appId `com.chapterbound.app`、webDir `dist`、Android 壳 | — |
+| `android/app/src/main/java/com/chapterbound/app/MainActivity.java` | Android 原生入口：读取状态栏 WindowInsets 注入 `--safe-top` CSS 变量（WebView 的 env() 恒为 0，必须原生注入） | `injectSafeAreaTop()` |
+| `android/app/src/main/res/values*/styles.xml` | Android 主题：`windowOptOutEdgeToEdgeEnforcement`（v35）+ 状态栏颜色对齐 Web 主题（亮/暗/夜间四变体） | — |
 
 ### 5.2 关键调用链速查
 
@@ -306,10 +312,61 @@ ReaderPage 设置面板 onChange
 | 修改电子书渲染行为 | `EpubEngine.ts`、`useReader.ts`、`ReaderPage.tsx`（阅读器容器和控件） |
 | 修改 EPUB 元数据提取 | `EpubParser.ts`、`bookshelfStore.ts`（importBook 中使用解析结果的逻辑） |
 | 修改数据导入导出逻辑 | `compendiumStore.ts`、`IndexedDBAdapter.ts`（importCompendium）、`ReaderPage.tsx`（导入 UI） |
+| 改移动端安全区/状态栏适配 | `MainActivity.java`（注入值）、`index.css`（`--safe-top` + 触屏保底）、`ReaderPage.tsx`（应用点 padding） |
+| 改触屏手势（滑动/tap 翻页） | `EpubEngine.ts`（手势判定阈值）、`ReaderPage.tsx`（订阅与执行）、`useIsTouch.ts`（检测源） |
+| 改移动端侧栏/工具栏布局 | `ReaderPage.tsx` + `index.css`（`.icon-btn` 44px 命中区） |
+| 改 Android 构建/图标/主题 | `android/app/src/main/res/`（样式与图标）、`capacitor.config.ts`、`MainActivity.java` |
 
 ---
 
-## 6. 维护说明
+## 6. Android 平台注意事项（Capacitor，2026-08 新增）
+
+### 6.1 分发形态
+
+同一份 Vite Web 应用三种壳分发：Electron / Tauri（桌面）、Capacitor WebView（Android APK，`com.chapterbound.app`）。**Web 代码是唯一实现**——Android 侧只有样式豁免和一处原生桥接，没有业务逻辑。
+
+### 6.2 安全区注入机制（最易被误解的桥接）
+
+**为什么需要：** Android WebView 的 CSS `env(safe-area-inset-*)` 恒为 0（Chromium 在 WebView 内不填充），edge-to-edge 下内容会铺进状态栏/刘海防误触区。
+
+**注入链路（双层）：**
+1. `MainActivity.injectSafeAreaTop()`：读 `WindowInsetsCompat.Type.statusBars()` 高度 → `evaluateJavascript` 写入 `documentElement.style.setProperty('--safe-top', 'NNpx')` + `data-safe-top-injected='1'` 标记。页面未就绪时返回值非 `true`，300ms 后重试；insets 为空 200ms 重试。
+2. CSS 保底（`index.css`）：`@media (hover: none)` 且 **无** `data-safe-top-injected` 时 `--safe-top: max(env(), 16px)`——仅原生注入失败时生效，防止工具栏落入状态栏。
+
+**修改注意事项：**
+- 只取 `statusBars()`，不要放宽为 `cutout` 取大——竖屏刘海已含在状态栏高度内，取大（如 80+px）会下移过头（踩过坑）
+- 注入值改动需重新 `assembleDebug`，**不要只在 Web 层改**——`--safe-top` 桌面值恒为 0，桌面永远无感
+- `values-v35/styles.xml` 的 `windowOptOutEdgeToEdgeEnforcement` 与注入是双保险，删掉任一都会回退到"工具栏落入状态栏"
+
+### 6.3 Android 特有风险清单
+
+| 风险 | 为什么是问题 | 状态 |
+|------|-------------|------|
+| IndexedDB 存于 WebView 应用数据目录 | 卸载 / 系统清数据 → 书库、书签、进度、图鉴全部丢失，无备份导出（Phase 2 未做） | 已知，待补 |
+| 无 release 签名 | 当前分发的是 debug APK，签名是 debug key | 待办（Phase 3+） |
+| intent-filter 未接 | 无法"用 Chapterbound 打开 .epub"；导入走系统文件选择器（SAF 回退） | 待办（Phase 3+） |
+| `@capacitor/app` backButton 未接 | 返回键靠 popstate 方案（见 6.4），原生的 backButton 事件未接入 | 待办（Phase 3+） |
+| 选区检索浮窗（`selData` 定位） | Android 原生选区菜单与 Web 浮窗并存，坐标/交互不可靠 | 已知：仅保证不崩溃，重设计待 Phase 4 真机专项 |
+| spread 'auto' 双页展开 | 窄屏下 epub.js 实际退化为单页，但未在真机验证 | 待 Phase 4 真机验证后决定是否默认 'single' |
+| `crypto.randomUUID` | 需 Chrome 92+（Android 11+ 默认满足）；更旧设备报错 | 待 Phase 3 验证，必要时 polyfill |
+| 旧版本 Android WebView 碎片化 | 不同厂商 WebView 版本差异大，CSS 新特性可能缺失 | 待真机验证 |
+
+### 6.4 返回键方案（popstate 单条目栈）
+
+`ReaderPage` 进入阅读器时 `history.replaceState` 压入一条"阅读器"条目；打开侧栏/图鉴详情/书签选择器只 `replaceState` 更新该条目（**不 pushState**），所以历史栈恒为两条。popstate 时按 refs 分发关闭最上层覆盖层（图鉴详情 → 侧栏 → 书签选择器 → 回书架），关掉后立即重新压回条目。`@capacitor/app` 接入后叠加在同一逻辑上（Phase 3）。
+
+**坑：** 覆盖层内关闭按钮必须同步 `replaceState` 复位，否则返回键会重复关一个已经不存在的层（曾出现"X 按钮关闭侧栏但返回键再弹开"问题）。
+
+### 6.5 构建与分发备忘
+
+- 构建链：`npm run build` → `npx cap sync android`（复制 dist 到 `assets/public` + 同步配置）→ `cd android && gradlew assembleDebug`
+- 环境：JDK 21（`JAVA_HOME` 用 Windows 绝对路径）、SDK `C:/android-sdk`（`sdk.dir` 必须正斜杠）、国内 Maven/Gradle 镜像（`~/.gradle/init.gradle` + 腾讯云 distributionUrl）
+- **改完 Web 代码忘掉 `cap sync` 是最常见的"改了没用"原因**——APK 里是旧 web 产物
+- 桌面 EXE 构建（electron-builder）与 Android 互不影响：`release/` + `electron-dist/`（本地离线运行时）保留为 EXE 基线
+
+---
+
+## 7. 维护说明
 
 - **更新频率：** 代码库结构变化、新的风险被发现或修复后更新相应章节
 - **定位策略：** 本文档不记录精确行号。需要定位代码时，使用文档中的模块名 + 方法名在 IDE 中搜索，或根据项目目录结构按文件名查找

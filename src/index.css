@@ -14,6 +14,19 @@
   --shadow-float: 0 8px 24px rgba(60, 50, 38, 0.10), 0 2px 6px rgba(60, 50, 38, 0.05);
   --radius-card: 16px;
   --radius-full: 9999px;
+  /* 安全区（刘海屏/手势条）；桌面环境 env() 解析为 0，无感 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 触屏保底：Android WebView 的 env() 恒为 0。原生 MainActivity 注入真实高度时会同时写入
+   data-safe-top-injected 标记（此规则随即失效，由注入值精确控制位置）；仅当注入失败时
+   才启用 16px 保底，避免工具栏落入状态栏防误触区。桌面 hover:hover 不匹配，无感。 */
+@media (hover: none) {
+  :root:not([data-safe-top-injected]) {
+    --safe-top: max(env(safe-area-inset-top, 0px), 16px);
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
 }
 
 html {
@@ -83,6 +96,39 @@ body {
 
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(232, 220, 207, 0.20);
+}
+
+/* ── 移动端触屏适配 ────────────────────────────── */
+
+/* hover-reveal：桌面 hover 显示的操作按钮，触屏设备常显。
+   替换 LibraryPage 中 `hidden group-hover:flex` 的写法，桌面渲染结果等价。 */
+.hover-reveal {
+  display: none;
+}
+
+.group:hover .hover-reveal {
+  display: flex;
+}
+
+@media (hover: none) {
+  .hover-reveal {
+    display: flex;
+  }
+
+  /* 触屏阅读容器：横向手势交给 JS（滑动翻页），纵向保留滚动；防橡皮筋/刷新手势 */
+  .reader-touch {
+    touch-action: pan-y;
+    overscroll-behavior: none;
+  }
+
+  /* 触屏命中区 ≥44px（Apple HIG）：工具栏与侧栏图标按钮统一 */
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 /* 图鉴详情浮层 — 深羊皮纸独立色系 */
