@@ -4,6 +4,7 @@ import type Rendition from 'epubjs/types/rendition'
 import type { NavItem } from 'epubjs/types/navigation'
 import type { IReaderEngine } from '../core/interfaces/IReaderEngine'
 import { BookFormat, type TOCItem } from '../core/types'
+import { detectTouch } from '../hooks/useIsTouch'
 
 type EventCallback = (...args: unknown[]) => void
 
@@ -15,6 +16,9 @@ export class EpubEngine implements IReaderEngine {
   private rendition: Rendition | null = null
   private containerEl: HTMLElement | null = null
   private listeners = new Map<string, Set<EventCallback>>()
+  // 触屏手势：已绑定手势的 contents（epub.js 跨 section 重建 iframe，须防重复绑定）
+  private gestureBoundContents = new Set<object>()
+  private touchStart: { x: number; y: number; t: number } | null = null
 
   async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
     this.containerEl = container
@@ -60,6 +64,15 @@ export class EpubEngine implements IReaderEngine {
       this.emit('selection', text, cfiRange, selX, selY)
     })
 
+    // 触屏手势（B 类：仅触屏设备注册，桌面端行为零变化）
+    // iframe 内 touch 事件不冒泡，epub.js Contents 以事件名转发到 contents.on（DOM_EVENTS 含 touch 三件套）。
+    // default manager 无 tap 处理，手势无冲突；跨 section 翻页重建 iframe 后由 'rendered' 重新绑定。
+    if (detectTouch()) {
+      this.rendition.on('rendered', (_section: unknown, view: { contents?: unknown }) => {
+        if (view?.contents) this.bindGestures(view.contents)
+      })
+    }
+
     await this.book.ready
     try {
       await this.rendition.display(startLoc)
@@ -81,6 +94,8 @@ export class EpubEngine implements IReaderEngine {
     this.rendition = null
     this.containerEl = null
     this.listeners.clear()
+    this.gestureBoundContents.clear()
+    this.touchStart = null
   }
 
   nextPage(): void {
@@ -226,6 +241,60 @@ export class EpubEngine implements IReaderEngine {
 
   private emit(event: string, ...args: unknown[]): void {
     this.listeners.get(event)?.forEach((cb) => cb(...args))
+  }
+
+  /**
+   * 触屏手势：swipe（翻页）与 tap（点按翻页/呼出工具栏）。
+   * 事件对象为 iframe 内原始 DOM 事件（Contents 转发）。手势状态机只记录起点，
+   * touchmove 不主动 preventDefault —— touch-action: pan-y 已声明横向手势归 JS。
+   */
+  private bindGestures(contents: unknown): void {
+    const c = contents as { document: Document; on: (ev: string, cb: (e: TouchEvent) => void) => void }
+    if (this.gestureBoundContents.has(c)) return
+    this.gestureBoundContents.add(c)
+
+    // 纵向滚动保留给系统，横向滑动手势交由 JS 判定
+    try {
+      if (!c.document.head.querySelector('[data-epub-gesture]')) {
+        const style = c.document.createElement('style')
+        style.setAttribute('data-epub-gesture', '')
+        style.textContent = 'html, body { touch-action: pan-y; overscroll-behavior: none; }'
+        c.document.head.appendChild(style)
+      }
+    } catch { /* iframe 文档未就绪时跳过注入，不影响手势 */ }
+
+    c.on('touchstart', (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!t) return
+      this.touchStart = { x: t.clientX, y: t.clientY, t: Date.now() }
+    })
+
+    c.on('touchend', (e: TouchEvent) => {
+      const start = this.touchStart
+      this.touchStart = null
+      if (!start) return
+      const t = e.changedTouches[0]
+      if (!t) return
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      const dt = Date.now() - start.t
+
+      // swipe：横向位移 ≥60px、横向显著大于纵向、时长 ≤600ms
+      if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 2 && dt <= 600) {
+        this.emit('gesture:swipe', dx > 0 ? 'right' : 'left')
+        return
+      }
+
+      // tap：时长 ≤350ms、位移 ≤10px；长按选词保护 —— 选区非空时抑制
+      if (dt <= 350 && Math.abs(dx) <= 10 && Math.abs(dy) <= 10) {
+        try {
+          const selected = c.document.getSelection()?.toString() ?? ''
+          if (selected.trim().length > 0) return
+        } catch { /* 选区读取失败仍按 tap 处理 */ }
+        const width = c.document.documentElement.clientWidth || 1
+        this.emit('gesture:tap', { xRatio: t.clientX / width })
+      }
+    })
   }
 
   private computeProgress(cfi: string): number {

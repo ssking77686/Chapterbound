@@ -60,6 +60,17 @@ The project's standout feature. As you read, characters, locations, and monsters
 
 ---
 
+## Platforms
+
+| Platform | How |
+|----------|-----|
+| Browser | `npm run dev` or deploy the static `dist/` directory |
+| Windows desktop | Electron (`npm run electron:build`, produces an EXE installer) |
+| Desktop (optional) | Tauri v2 (`npm run tauri`) |
+| Android phone | Capacitor wrapper, one-command APK build, sideload to distribute |
+
+One codebase, three shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
+
 ## Quick Start
 
 ```bash
@@ -67,6 +78,10 @@ npm install
 npm run dev      # development server
 npm run build    # production build
 npm run lint     # lint
+
+# Android APK (requires JDK 21 + Android SDK, see Developer Docs)
+npx cap sync android
+cd android && ./gradlew assembleDebug   # output: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
@@ -83,6 +98,15 @@ npm run lint     # lint
 ---
 
 ## Changelog
+
+**v1.4.0** (2026-08)
+- Mobile adaptation: Capacitor 8 wrapper — build an Android APK for sideload distribution
+- Touch page turning: swipe left/right to turn pages, tap either side of the screen (no conflict with long-press text selection)
+- Status-bar adaptation: toolbar automatically clears the notch / anti-accidental-touch zone; safe-area height injected natively; light/dark status bar follows the theme
+- Full-width sidebar: the sidebar spans the screen on phones with its own close button; back button exits layers in order (detail → sidebar → bookshelf)
+- Touch interaction completeness: delete/cover buttons always visible on the bookshelf, unified 44px hit targets, onboarding cards auto-scale to screen width
+- App icon: Android icon matches the EXE (dark brown background + red book)
+- Import convergence: EPUB only — other formats now show a clear message (previously they imported but couldn't open)
 
 **v1.3.2** (2026-08)
 - Security hardening: React Error Boundary for render-crash recovery, global unhandledrejection handler, transactional IndexedDB writes

@@ -33,7 +33,8 @@ export function ToastContainer() {
                 color: '#3C3226',
                 cursor: 'pointer',
                 pointerEvents: 'auto',
-                whiteSpace: 'nowrap',
+                maxWidth: 'calc(100vw - 32px)',
+                textAlign: 'center',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
               }}
             >
