@@ -197,8 +197,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
   // 覆盖层栈：图鉴详情 > 侧栏 > 阅读器。popstate 处理器只读 ref，不依赖闭包捕获的 state。
   const sidebarTabRef = useRef(sidebarTab)
   const detailEntryIdRef = useRef(detailEntryId)
+  const pickerOpenRef = useRef(pickerOpen)
   useEffect(() => { sidebarTabRef.current = sidebarTab }, [sidebarTab])
   useEffect(() => { detailEntryIdRef.current = detailEntryId }, [detailEntryId])
+  useEffect(() => { pickerOpenRef.current = pickerOpen }, [pickerOpen])
 
   const closeTopOverlay = useCallback(() => {
     if (detailEntryIdRef.current !== null) {
@@ -206,6 +208,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
       setSidebarTab('compendium')
     } else if (sidebarTabRef.current !== null) {
       setSidebarTab(null)
+    } else if (pickerOpenRef.current) {
+      setPickerOpen(false)
     } else {
       onBack()
     }
@@ -213,7 +217,16 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
   useEffect(() => {
     history.pushState({ reader: true }, '')
-    const onPopState = () => closeTopOverlay()
+    const onPopState = () => {
+      const hadOverlay = detailEntryIdRef.current !== null
+        || sidebarTabRef.current !== null
+        || pickerOpenRef.current
+      closeTopOverlay()
+      // 覆盖层只更新 reader 条目的 state（不新增条目），返回键弹出的就是 reader 条目本身。
+      // 关掉覆盖层后条目已被弹出 → 重新压入，维持「关覆盖层 → 再按返回 → 退出阅读器」的逐层语义；
+      // 无覆盖层时是退出阅读器（onBack），不重压，卸载时历史栈恢复干净。
+      if (hadOverlay) history.pushState({ reader: true }, '')
+    }
     window.addEventListener('popstate', onPopState)
     return () => {
       window.removeEventListener('popstate', onPopState)
@@ -257,10 +270,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
     return loc ? getBookmarkAt(loc) : undefined
   }, [currentLocation, getBookmarkAt])
 
-  // 打开侧栏：记录返回键栈条目（Android back 逐层退出）
+  // 打开侧栏：更新 reader 条目的 state 而非新增历史条目（历史栈恒为两条，返回键逐层退出）
   const openSidebar = useCallback((tab: 'toc' | 'bookmarks' | 'compendium' | 'settings') => {
     setSidebarTab(tab)
-    history.pushState({ overlay: true }, '')
+    history.replaceState({ reader: true, sidebar: tab }, '')
   }, [])
 
   const handleBookmarkClick = useCallback(() => {
@@ -272,13 +285,17 @@ export function ReaderPage({ bookId, onBack }: Props) {
       openSidebar('bookmarks')
       return
     }
-    setPickerOpen((p) => !p)
-  }, [currentLocation, getBookmarkAt, openSidebar])
+    // picker 纳入返回键栈：状态与历史 state 同步（replaceState 不新增条目）
+    const next = !pickerOpen
+    setPickerOpen(next)
+    history.replaceState({ reader: true, picker: next }, '')
+  }, [currentLocation, getBookmarkAt, openSidebar, pickerOpen])
 
   const handlePickColor = useCallback(async (color: string) => {
     const loc = currentLocation()
     if (!loc) return
     setPickerOpen(false)
+    history.replaceState({ reader: true }, '')
     const { current, total } = pageInfoRef.current
     const progress = total > 0 ? Math.round((current / total) * 100) : 50
     await addBookmark(bookId, loc, `书签 ${bookmarks.length + 1}`, color, progress)
@@ -328,7 +345,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setDetailEntryId(id)
     setSidebarTab(null)
     setRelationsExpanded(false)
-    history.pushState({ overlay: true }, '')
+    history.replaceState({ reader: true, detail: id }, '')
   }, [])
 
   const toolbarBg = 'var(--color-toolbar)'
@@ -387,7 +404,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
           <motion.button
             ref={bookmarkScope}
             onClick={handleBookmarkClick}
-            className="rounded-full p-2.5"
+            className="icon-btn rounded-full p-2.5"
             whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
             whileTap={{ scale: 0.94 }}
             transition={springPress}
@@ -408,7 +425,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  onClick={() => setPickerOpen(false)}
+                  onClick={() => {
+                    setPickerOpen(false)
+                    history.replaceState({ reader: true }, '')
+                  }}
                 />
                 <motion.div
                   className="absolute right-0 top-full z-20 mt-2 flex gap-2 rounded-2xl px-3 py-2.5"
@@ -459,7 +479,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     whileHover={{ scale: 1.3 }}
                     whileTap={{ scale: 0.9 }}
                     transition={springPress}
-                    onClick={() => setPickerOpen(false)}
+                    onClick={() => {
+                      setPickerOpen(false)
+                      history.replaceState({ reader: true }, '')
+                    }}
                     aria-label="关闭"
                   >
                     <X className="h-2.5 w-2.5" style={{ color: 'var(--color-text-secondary)' }} />
@@ -497,7 +520,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             compendiumMarkViewed()
             openSidebar('compendium')
           }}
-          className="relative rounded-full p-2.5"
+          className="icon-btn relative rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -737,8 +760,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         }}
                       />
                       {/* 触屏下不显示 label（无 hover，且右侧空间宝贵） */}
+                      {!isTouch && (
                       <span
-                        className={`pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium group-hover/dot:inline-block ${isTouch ? 'hidden' : ''}`}
+                        className="pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium group-hover/dot:inline-block"
                         style={{
                           background: toolbarBg,
                           backdropFilter: toolbarBlur,
@@ -750,6 +774,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       >
                         {bm.label}
                       </span>
+                      )}
                     </motion.button>
                   </div>
                 )
@@ -877,7 +902,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               style={{ background: 'rgba(60,50,38,0.15)' }}
-              onClick={() => setSidebarTab(null)}
+              onClick={() => {
+                setSidebarTab(null)
+                history.replaceState({ reader: true }, '')
+              }}
             />
             <motion.nav
               className={`${isTouch ? 'w-full max-w-[420px]' : 'w-72'} overflow-y-auto`}
@@ -927,7 +955,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   {toc.map((item, i) => (
                     <motion.button
                       key={i}
-                      className="block w-full rounded-lg py-2.5 text-left text-sm font-medium"
+                      className={`block w-full rounded-lg py-2.5 text-left text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
                       style={{
                         paddingLeft: item.level * 14 + 8,
                         color: 'var(--color-text)',
@@ -938,6 +966,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       onClick={() => {
                         getEngine()?.goToLocation(item.href)
                         setSidebarTab(null)
+                        history.replaceState({ reader: true }, '')
                       }}
                     >
                       {item.label}
@@ -984,10 +1013,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             style={{ background: bm.color, marginLeft: 0 }}
                           />
                           <button
-                            className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                            className={`min-w-0 flex-1 px-3 py-2.5 text-left ${isTouch ? 'min-h-11' : ''}`}
                             onClick={() => {
                               getEngine()?.goToLocation(bm.location)
                               setSidebarTab(null)
+                              history.replaceState({ reader: true }, '')
                             }}
                           >
                             <p
@@ -1588,7 +1618,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 whileTap={{ scale: 0.94 }}
                 transition={springPress}
                 style={{ color: 'var(--comp-text)' }}
-                onClick={() => { setDetailEntryId(null); setSidebarTab('compendium') }}
+                onClick={() => {
+                  setDetailEntryId(null)
+                  setSidebarTab('compendium')
+                  history.replaceState({ reader: true, sidebar: 'compendium' }, '')
+                }}
                 aria-label="返回图鉴列表"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -1652,7 +1686,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 whileTap={{ scale: 0.94 }}
                 transition={springPress}
                 style={{ color: 'var(--comp-text)' }}
-                onClick={() => { setDetailEntryId(null); setSidebarTab('compendium') }}
+                onClick={() => {
+                  setDetailEntryId(null)
+                  setSidebarTab('compendium')
+                  history.replaceState({ reader: true, sidebar: 'compendium' }, '')
+                }}
                 aria-label="关闭"
               >
                 <X className="h-5 w-5" />
