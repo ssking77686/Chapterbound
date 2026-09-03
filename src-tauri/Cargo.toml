@@ -1,6 +1,6 @@
 [package]
 name = "chapterbound"
-version = "1.4.0"
+version = "1.5.0"
 description = "沉浸式 EPUB 电子书阅读器"
 authors = ["ahine Yang"]
 license = "MIT"

@@ -98,6 +98,11 @@ cd android && ./gradlew assembleDebug   # output: android/app/build/outputs/apk/
 
 ## Changelog
 
+**v1.5.0** (2026-09)
+- Desktop migrated to Tauri v2: Electron removed; NSIS installer (`npm run desktop:build`, ~4.5 MB) rendered by the native Windows WebView2
+- Version unified: desktop / web / Android all aligned at v1.5.0
+- Dev docs synced: desktop build toolchain (MSYS2 + China-network bundling mirror workaround) documented in DEVELOPMENT.md; distribution sections updated in technical-audit.md
+
 **v1.4.0** (2026-08)
 - Mobile adaptation: Capacitor 8 wrapper — build an Android APK for sideload distribution
 - Touch page turning: swipe left/right to turn pages, tap either side of the screen (no conflict with long-press text selection)

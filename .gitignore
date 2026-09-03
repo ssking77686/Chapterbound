@@ -33,10 +33,7 @@ dist-ssr
 # Tauri build artifacts
 src-tauri/target/
 src-tauri/gen/
-
-# Legacy Electron build artifacts (release/ kept as archive of last EXE installers)
-release/
-electron-dist/
+release/                # Latest NSIS installer copy (maintained by scripts/copy-installer.mjs)
 
 # Rust
 *.rs.bk

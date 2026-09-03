@@ -1,7 +1,7 @@
 {
   "name": "Chapterbound",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build && node scripts/copy-installer.mjs",
+    "android:build": "npm run build && npx cap sync android && cd android && call .\\gradlew.bat assembleDebug && cd .. && node scripts/copy-apk.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

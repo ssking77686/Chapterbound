@@ -17,6 +17,7 @@
 | 动效 | motion (formerly framer-motion) |
 | 图标 | Lucide |
 | 移动端壳 | Capacitor 8（Android WebView 封装，生成 APK） |
+| 桌面壳 | Tauri v2（Windows WebView2 封装，NSIS 安装包） |
 
 ## 开发命令
 
@@ -28,15 +29,14 @@ npm run preview   # 预览生产构建
 npm run lint      # oxlint 代码检查
 
 # Android（APK 构建）
-npx cap sync android        # 把 dist/ 复制进 android/app/src/main/assets/public + 同步原生配置
-cd android && ./gradlew assembleDebug   # 构建 debug APK（产物：android/app/build/outputs/apk/debug/app-debug.apk）
+npm run android:build       # 一条龙：npm run build → cap sync → gradlew assembleDebug → APK 自动复制到 release/
 
 # 桌面壳（Tauri v2，唯一桌面分发）
 npm run desktop:dev         # 开发模式（自动起 Vite dev + 编译运行）
-npm run desktop:build       # 打包 Windows 安装包（NSIS，产物：src-tauri/target/release/bundle/nsis/Chapterbound_1.4.0_x64-setup.exe）
+npm run desktop:build       # 打包 Windows 安装包（NSIS，最新产物自动复制到 release/）
 ```
 
-> **桌面（Tauri）构建环境**：rustup `x86_64-pc-windows-gnu` 工具链 + MSYS2 mingw64（`C:\msys64`）。链路依赖三样外部工具，缺一不可：① binutils 的 `dlltool.exe`（raw-dylib 导入库）→ `C:\msys64\mingw64\bin`（需在 PATH，且**未持久化到用户环境变量**时每个新会话需自行 `export PATH="$PATH:C:/msys64/mingw64/bin"`）；② `~/.cargo/config.toml` 已把 linker 指向 rustup 自带的 `rust-lld.exe`（GNU 工具链不自带 gcc，链接无需外置 gcc）；③ **mingw `gcc`**（`pacman -S mingw-w64-x86_64-gcc`）——windres 预处理 `resource.rc` 时会调用 `gcc -E`，缺失时 tauri-build 静默失败（表现为 stdout 以 `package.metadata does not exist` 信息行收尾后 exit 101，真正的报错被 tauri-winres 的 `.unwrap()` 吞掉，需手动跑 windres 复现）。MSYS2 仓库镜像见 `/etc/pacman.d/mirrorlist.mingw`（本机已配 TUNA `…/msys2/mingw/$repo`，注意 ucrt64/clang64 不在 TUNA 上）。
+> **桌面（Tauri）构建环境**：rustup `x86_64-pc-windows-gnu` 工具链 + MSYS2 mingw64（`C:\msys64`）。链路依赖三样外部工具，缺一不可：① binutils 的 `dlltool.exe`（raw-dylib 导入库）→ `C:\msys64\mingw64\bin`（本机已于 2026-09-03 持久化进用户环境变量；新机器需自行持久化，或每个新会话 `export PATH="$PATH:C:/msys64/mingw64/bin"`）；② `~/.cargo/config.toml` 已把 linker 指向 rustup 自带的 `rust-lld.exe`（GNU 工具链不自带 gcc，链接无需外置 gcc）；③ **mingw `gcc`**（`pacman -S mingw-w64-x86_64-gcc`）——windres 预处理 `resource.rc` 时会调用 `gcc -E`，缺失时 tauri-build 静默失败（表现为 stdout 以 `package.metadata does not exist` 信息行收尾后 exit 101，真正的报错被 tauri-winres 的 `.unwrap()` 吞掉，需手动跑 windres 复现）。MSYS2 仓库镜像见 `/etc/pacman.d/mirrorlist.mingw`（本机已配 TUNA `…/msys2/mingw/$repo`，注意 ucrt64/clang64 不在 TUNA 上）。
 
 > **国内网络打包注意**：`tauri build` 会从 GitHub Releases 下载 NSIS 工具链（tauri-bundler 2.9.4 需两个资产：`nsis-3.11.zip`（SHA1 `ef7ff767…bb10d`）与 `nsis_tauri_utils-v0.5.3` 的 dll（SHA1 `75197fee…9b860`））。GitHub 直连会 502。两种解法：① 设 `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR=https://gh-proxy.com/https://github.com`（值 = 代理前缀 + 完整 github 域名）重跑；② 最稳——手动经代理下载两个资产，把 zip 剥掉 `nsis-3.11/` 顶层解压到 `%LOCALAPPDATA%\tauri\NSIS`，dll 放入 `Plugins\x86-unicode\additional\`（bundler 校验必需文件齐全即跳过下载）。本机已预置，直接 `npm run desktop:build` 即可。
 
@@ -56,6 +56,7 @@ src/
 ├── components/     # UI 组件（LibraryPage, ReaderPage, OnboardingOverlay, AboutOverlay, ErrorBoundary, ToastContainer）
 └── plugins/        # 应用启动注册（default-plugins）
 
+src-tauri/          # Tauri v2 桌面壳（Rust 入口 + tauri.conf.json 配置）
 android/            # Capacitor Android 工程（Gradle；由 cap sync 管理）
 capacitor.config.ts # Capacitor 配置（appId: com.chapterbound.app，webDir: dist）
 ```
@@ -122,7 +123,7 @@ motion/react 提供，三套 spring 配置：
 - JDK 21（`JAVA_HOME` 必须指向 Windows 绝对路径，unix 风格路径对 .bat 无效）
 - Android SDK：`C:/android-sdk`（platforms/android-36 + build-tools/34.0.0 + platform-tools + cmdline-tools）
 - 国内镜像：`~/.gradle/init.gradle` 注入腾讯云 nexus maven-public + Google 官方 + 阿里云后备；`gradle-wrapper.properties` 的 distributionUrl 用腾讯云 gradle 镜像
-- **修改 web 代码后必须** `npm run build && npx cap sync android` 再 `assembleDebug`，否则 APK 里是旧 web 产物
+- **修改 web 代码后跑 `npm run android:build`**（内含 build + cap sync），裸跑 assembleDebug 会打包旧 web 产物
 
 ### 已知问题
 

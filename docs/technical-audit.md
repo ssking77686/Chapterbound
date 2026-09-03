@@ -359,10 +359,10 @@ ReaderPage 设置面板 onChange
 
 ### 6.5 构建与分发备忘
 
-- 构建链：`npm run build` → `npx cap sync android`（复制 dist 到 `assets/public` + 同步配置）→ `cd android && gradlew assembleDebug`
+- 构建链：`npm run android:build`（内含 `npm run build` → `cap sync android` → `gradlew assembleDebug`，APK 自动复制到根目录 `release/`）
 - 环境：JDK 21（`JAVA_HOME` 用 Windows 绝对路径）、SDK `C:/android-sdk`（`sdk.dir` 必须正斜杠）、国内 Maven/Gradle 镜像（`~/.gradle/init.gradle` + 腾讯云 distributionUrl）
 - **改完 Web 代码忘掉 `cap sync` 是最常见的"改了没用"原因**——APK 里是旧 web 产物
-- 桌面（Tauri v2）构建链独立：`npm run desktop:build`（内部 = `npm run build` → `tauri build`），NSIS 产物在 `src-tauri/target/release/bundle/nsis/`，与 Android 互不影响。首次构建需联网拉 Rust crate + NSIS 打包器（此后有缓存）。**改完 Web 代码同样要等 beforeBuildCommand 重跑 `npm run build`**，装进安装包的是 `dist/` 产物
+- 桌面（Tauri v2）构建链独立：`npm run desktop:build`（内部 = `npm run build` → `tauri build`），NSIS 产物在 `src-tauri/target/release/bundle/nsis/`（`desktop:build` 结束后自动把最新安装包复制到根目录 `release/`），与 Android 互不影响。首次构建需联网拉 Rust crate + NSIS 打包器（此后有缓存）。**改完 Web 代码同样要等 beforeBuildCommand 重跑 `npm run build`**，装进安装包的是 `dist/` 产物
 - WebView2 数据目录由 identifier（`com.ereader.desktop`）决定，与 Electron 时代的书库（`%APPDATA%\Chapterbound`）不互通——有存量桌面用户需先做数据迁移方案
 
 ---

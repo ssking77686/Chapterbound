@@ -98,6 +98,11 @@ cd android && ./gradlew assembleDebug   # 产物：android/app/build/outputs/apk
 
 ## 更新日志
 
+**v1.5.0** (2026-09)
+- 桌面端迁移 Tauri v2：Electron 移除，NSIS 安装包（`npm run desktop:build`，约 4.5 MB），Windows 原生 WebView2 渲染
+- 版本统一：桌面 / Web / Android 三端版本号对齐 v1.5.0
+- 维护文档同步：桌面构建环境（MSYS2 工具链 + 国内打包镜像方案）入 DEVELOPMENT.md，technical-audit.md 分发章节更新
+
 **v1.4.0** (2026-08)
 - 移动端适配：Capacitor 8 封装，可打包 Android APK 侧载分发
 - 触屏翻页：左右滑动翻页、轻点屏幕两侧翻页（与长按选词互不冲突）
