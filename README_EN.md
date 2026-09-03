@@ -65,11 +65,10 @@ The project's standout feature. As you read, characters, locations, and monsters
 | Platform | How |
 |----------|-----|
 | Browser | `npm run dev` or deploy the static `dist/` directory |
-| Windows desktop | Electron (`npm run electron:build`, produces an EXE installer) |
-| Desktop (optional) | Tauri v2 (`npm run tauri`) |
+| Windows desktop | Tauri v2 (`npm run desktop:build`, produces an NSIS installer) |
 | Android phone | Capacitor wrapper, one-command APK build, sideload to distribute |
 
-One codebase, three shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
+One codebase, two shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
 
 ## Quick Start
 
@@ -98,6 +97,11 @@ cd android && ./gradlew assembleDebug   # output: android/app/build/outputs/apk/
 ---
 
 ## Changelog
+
+**v1.5.0** (2026-09)
+- Desktop migrated to Tauri v2: Electron removed; NSIS installer (`npm run desktop:build`, ~4.5 MB) rendered by the native Windows WebView2
+- Version unified: desktop / web / Android all aligned at v1.5.0
+- Dev docs synced: desktop build toolchain (MSYS2 + China-network bundling mirror workaround) documented in DEVELOPMENT.md; distribution sections updated in technical-audit.md
 
 **v1.4.0** (2026-08)
 - Mobile adaptation: Capacitor 8 wrapper — build an Android APK for sideload distribution

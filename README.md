@@ -65,11 +65,10 @@
 | 平台 | 方式 |
 |------|------|
 | 浏览器 | `npm run dev` 或部署 `dist/` 静态目录 |
-| Windows 桌面 | Electron（`npm run electron:build`，产出 EXE 安装包） |
-| 桌面（可选） | Tauri v2（`npm run tauri`） |
+| Windows 桌面 | Tauri v2（`npm run desktop:build`，产出 NSIS 安装包） |
 | Android 手机 | Capacitor 封装，一键打包 APK，侧载分发（见下方命令） |
 
-同一份代码三种壳分发，行为一致。Android 端额外获得：**滑动 / 轻点翻页**、状态栏安全区适配（工具栏自动避开刘海/防误触区）、44px 触屏命中区、返回键逐层退出。
+同一份代码两种壳分发，行为一致。Android 端额外获得：**滑动 / 轻点翻页**、状态栏安全区适配（工具栏自动避开刘海/防误触区）、44px 触屏命中区、返回键逐层退出。
 
 ## 快速开始
 
@@ -98,6 +97,11 @@ cd android && ./gradlew assembleDebug   # 产物：android/app/build/outputs/apk
 ---
 
 ## 更新日志
+
+**v1.5.0** (2026-09)
+- 桌面端迁移 Tauri v2：Electron 移除，NSIS 安装包（`npm run desktop:build`，约 4.5 MB），Windows 原生 WebView2 渲染
+- 版本统一：桌面 / Web / Android 三端版本号对齐 v1.5.0
+- 维护文档同步：桌面构建环境（MSYS2 工具链 + 国内打包镜像方案）入 DEVELOPMENT.md，technical-audit.md 分发章节更新
 
 **v1.4.0** (2026-08)
 - 移动端适配：Capacitor 8 封装，可打包 Android APK 侧载分发
