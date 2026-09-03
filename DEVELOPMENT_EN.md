@@ -17,6 +17,7 @@
 | Animation | motion (formerly framer-motion) |
 | Icons | Lucide |
 | Mobile shell | Capacitor 8 (Android WebView wrapper, produces APK) |
+| Desktop shell | Tauri v2 (Windows WebView2 wrapper, NSIS installer) |
 
 ## Commands
 
@@ -28,15 +29,17 @@ npm run preview   # Preview production build
 npm run lint      # oxlint
 
 # Android (APK build)
-npx cap sync android        # copies dist/ into android/app/src/main/assets/public + syncs native config
-cd android && ./gradlew assembleDebug   # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:build       # One-shot: npm run build → cap sync → gradlew assembleDebug → APK auto-copied to release/
 
-# Desktop shells
-npm run electron:dev        # Electron dev mode
-npm run electron:build      # Package Windows EXE (output to release/, offline using electron-dist/ local runtime)
-npm run tauri               # Tauri CLI
+# Desktop shell (Tauri v2 — the only desktop distribution)
+npm run desktop:dev         # Dev mode (starts Vite dev server + compiles/runs)
+npm run desktop:build       # Package Windows installer (NSIS — latest artifact auto-copied to release/)
 ```
 
+> **Desktop (Tauri) build environment**: rustup `x86_64-pc-windows-gnu` toolchain + MSYS2 mingw64 (`C:\msys64`). Three external tools are required — none optional: ① binutils' `dlltool.exe` (raw-dylib import libs) → `C:\msys64\mingw64\bin` (persisted into the User PATH on this machine since 2026-09-03; on a fresh install persist it yourself, or run `export PATH="$PATH:C:/msys64/mingw64/bin"` each session); ② `~/.cargo/config.toml` points the linker at rustup's bundled `rust-lld.exe` (the GNU toolchain ships no external gcc; linking needs none); ③ **mingw `gcc`** (`pacman -S mingw-w64-x86_64-gcc`) — windres invokes `gcc -E` to preprocess `resource.rc`; when missing, the build fails silently (stdout ends at an informational `package.metadata does not exist` line, then exits 101 — the real error is swallowed by tauri-winres' `.unwrap()`, so reproduce by running windres by hand). MSYS2 repo mirrors live in `/etc/pacman.d/mirrorlist.mingw` (this machine uses TUNA `…/msys2/mingw/$repo` — note ucrt64/clang64 are NOT on TUNA).
+>
+> **Bundling behind the GFW**: `tauri build` downloads the NSIS toolchain from GitHub Releases (tauri-bundler 2.9.4 needs two assets: `nsis-3.11.zip` (SHA1 `ef7ff767…bb10d`) and the `nsis_tauri_utils-v0.5.3` dll (SHA1 `75197fee…49b860`)). Direct GitHub access may return 502. Two options: ① set `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR=https://gh-proxy.com/https://github.com` (value = proxy prefix + full github domain) and re-run; ② most reliable — download both assets by hand through the proxy, extract the zip flat into `%LOCALAPPDATA%\tauri\NSIS` (strip the `nsis-3.11/` top-level directory) and drop the dll into `Plugins\x86-unicode\additional\` (the bundler verifies all required files are present and skips downloading). Already pre-staged on this machine — plain `npm run desktop:build` works.
+>
 > **Android build environment** (see "Mobile adaptation" below): JDK 21 + Android SDK (platform 36, build-tools 34.0.0). Behind the GFW, configure Maven/Gradle mirrors (`~/.gradle/init.gradle` + `android/gradle/wrapper/gradle-wrapper.properties`); `sdk.dir` in `android/local.properties` must use forward slashes (`sdk.dir=C:/android-sdk` — backslashes are eaten by Java Properties escaping).
 
 ## Directory Structure
@@ -53,6 +56,7 @@ src/
 ├── components/     # UI components (LibraryPage, ReaderPage, OnboardingOverlay, AboutOverlay, ErrorBoundary, ToastContainer)
 └── plugins/        # App startup wiring (default-plugins)
 
+src-tauri/          # Tauri v2 desktop shell (Rust entry + tauri.conf.json config)
 android/            # Capacitor Android project (Gradle; managed by cap sync)
 capacitor.config.ts # Capacitor config (appId: com.chapterbound.app, webDir: dist)
 ```
@@ -103,7 +107,7 @@ Powered by motion/react, three spring presets:
 
 ### Mobile Adaptation (Capacitor Android)
 
-The same web app is distributed through three shells: Electron / Tauri (desktop) and Capacitor WebView (Android APK). Key mobile adaptation mechanisms:
+The same web app is distributed through two shells: Tauri (Windows desktop) and Capacitor WebView (Android APK). Key mobile adaptation mechanisms:
 
 **Touch detection (single source)** — `useIsTouch`: auto-detection via `matchMedia('(hover: none), (pointer: coarse)')`, overridable with `localStorage['force-touch']='1'/'0'` (debug only, no UI toggle). No scattered matchMedia across the app.
 
@@ -119,7 +123,7 @@ The same web app is distributed through three shells: Electron / Tauri (desktop)
 - JDK 21 (`JAVA_HOME` must be a Windows absolute path; unix-style paths break the .bat launcher)
 - Android SDK: `C:/android-sdk` (platforms/android-36 + build-tools/34.0.0 + platform-tools + cmdline-tools)
 - Mirrors: `~/.gradle/init.gradle` injects Tencent Cloud nexus maven-public + official Google + Aliyun fallback; `gradle-wrapper.properties` distributionUrl uses the Tencent Cloud gradle mirror
-- **After changing web code you MUST** `npm run build && npx cap sync android` before `assembleDebug`, otherwise the APK contains stale web assets
+- **After changing web code run `npm run android:build`** (it re-runs `npm run build` + `cap sync android` internally) — a bare `assembleDebug` packages stale web assets
 
 ### Known Issues
 

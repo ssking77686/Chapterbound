@@ -4,7 +4,7 @@
 >
 > **维护原则：** 记录模式而非行号（行号会过时），解释"为什么是问题"让未来维护者自行判断是否仍然适用。
 >
-> **最近更新：** 2026-08-31 — 移动端适配（Capacitor Android 分发），新增 §7 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
+> **最近更新：** 2026-09-03 — 桌面分发切换为 Tauri v2 单一壳（Electron 移除：`electron/`、electron-builder、`release/` 产物停用，§5.1/§6.1/§6.5 更新）。此前：2026-08-31 — 移动端适配（Capacitor Android 分发），新增 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
 
 ---
 
@@ -247,7 +247,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/components/ErrorBoundary.tsx` | React 错误边界：捕获渲染期异常，显示友好恢复页面 | `ErrorBoundary` |
 | `src/components/ToastContainer.tsx` | Toast 通知容器：固定顶部居中，motion 动画进出 | `ToastContainer` |
 | `src/data/project-info.ts` | 项目元数据：名称、版本、仓库地址、贡献者 | `projectInfo` |
-| `electron/main.cjs` | Electron 主进程：BrowserWindow 创建、dev/prod 模式切换 | — |
+| `src-tauri/` | Tauri v2 桌面壳（唯一桌面分发）：tauri.conf.json（窗口/NSIS/标识符）+ Rust 入口（无业务逻辑，debug 构建带日志插件） | — |
 | `src-tauri/src/lib.rs` | Tauri Rust 后端：WebView 配置、debug 日志插件 | — |
 | `capacitor.config.ts` | Capacitor 配置：appId `com.chapterbound.app`、webDir `dist`、Android 壳 | — |
 | `android/app/src/main/java/com/chapterbound/app/MainActivity.java` | Android 原生入口：读取状态栏 WindowInsets 注入 `--safe-top` CSS 变量（WebView 的 env() 恒为 0，必须原生注入） | `injectSafeAreaTop()` |
@@ -323,7 +323,7 @@ ReaderPage 设置面板 onChange
 
 ### 6.1 分发形态
 
-同一份 Vite Web 应用三种壳分发：Electron / Tauri（桌面）、Capacitor WebView（Android APK，`com.chapterbound.app`）。**Web 代码是唯一实现**——Android 侧只有样式豁免和一处原生桥接，没有业务逻辑。
+同一份 Vite Web 应用两种壳分发：Tauri v2（Windows 桌面，`npm run desktop:build`）、Capacitor WebView（Android APK，`com.chapterbound.app`）。**Web 代码是唯一实现**——原生侧只有壳配置、样式豁免与安全区桥接，没有业务逻辑。
 
 ### 6.2 安全区注入机制（最易被误解的桥接）
 
@@ -359,10 +359,11 @@ ReaderPage 设置面板 onChange
 
 ### 6.5 构建与分发备忘
 
-- 构建链：`npm run build` → `npx cap sync android`（复制 dist 到 `assets/public` + 同步配置）→ `cd android && gradlew assembleDebug`
+- 构建链：`npm run android:build`（内含 `npm run build` → `cap sync android` → `gradlew assembleDebug`，APK 自动复制到根目录 `release/`）
 - 环境：JDK 21（`JAVA_HOME` 用 Windows 绝对路径）、SDK `C:/android-sdk`（`sdk.dir` 必须正斜杠）、国内 Maven/Gradle 镜像（`~/.gradle/init.gradle` + 腾讯云 distributionUrl）
 - **改完 Web 代码忘掉 `cap sync` 是最常见的"改了没用"原因**——APK 里是旧 web 产物
-- 桌面 EXE 构建（electron-builder）与 Android 互不影响：`release/` + `electron-dist/`（本地离线运行时）保留为 EXE 基线
+- 桌面（Tauri v2）构建链独立：`npm run desktop:build`（内部 = `npm run build` → `tauri build`），NSIS 产物在 `src-tauri/target/release/bundle/nsis/`（`desktop:build` 结束后自动把最新安装包复制到根目录 `release/`），与 Android 互不影响。首次构建需联网拉 Rust crate + NSIS 打包器（此后有缓存）。**改完 Web 代码同样要等 beforeBuildCommand 重跑 `npm run build`**，装进安装包的是 `dist/` 产物
+- WebView2 数据目录由 identifier（`com.ereader.desktop`）决定，与 Electron 时代的书库（`%APPDATA%\Chapterbound`）不互通——有存量桌面用户需先做数据迁移方案
 
 ---
 
