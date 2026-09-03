@@ -34,7 +34,7 @@ dist-ssr
 src-tauri/target/
 src-tauri/gen/
 
-# Electron build artifacts
+# Legacy Electron build artifacts (release/ kept as archive of last EXE installers)
 release/
 electron-dist/
 

@@ -65,11 +65,10 @@ The project's standout feature. As you read, characters, locations, and monsters
 | Platform | How |
 |----------|-----|
 | Browser | `npm run dev` or deploy the static `dist/` directory |
-| Windows desktop | Electron (`npm run electron:build`, produces an EXE installer) |
-| Desktop (optional) | Tauri v2 (`npm run tauri`) |
+| Windows desktop | Tauri v2 (`npm run desktop:build`, produces an NSIS installer) |
 | Android phone | Capacitor wrapper, one-command APK build, sideload to distribute |
 
-One codebase, three shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
+One codebase, two shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
 
 ## Quick Start
 

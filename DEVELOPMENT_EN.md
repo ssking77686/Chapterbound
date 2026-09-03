@@ -31,10 +31,9 @@ npm run lint      # oxlint
 npx cap sync android        # copies dist/ into android/app/src/main/assets/public + syncs native config
 cd android && ./gradlew assembleDebug   # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
 
-# Desktop shells
-npm run electron:dev        # Electron dev mode
-npm run electron:build      # Package Windows EXE (output to release/, offline using electron-dist/ local runtime)
-npm run tauri               # Tauri CLI
+# Desktop shell (Tauri v2 — the only desktop distribution)
+npm run desktop:dev         # Dev mode (starts Vite dev server + compiles/runs)
+npm run desktop:build       # Package Windows installer (NSIS → src-tauri/target/release/bundle/nsis/Chapterbound_1.4.0_x64-setup.exe)
 ```
 
 > **Android build environment** (see "Mobile adaptation" below): JDK 21 + Android SDK (platform 36, build-tools 34.0.0). Behind the GFW, configure Maven/Gradle mirrors (`~/.gradle/init.gradle` + `android/gradle/wrapper/gradle-wrapper.properties`); `sdk.dir` in `android/local.properties` must use forward slashes (`sdk.dir=C:/android-sdk` — backslashes are eaten by Java Properties escaping).
@@ -103,7 +102,7 @@ Powered by motion/react, three spring presets:
 
 ### Mobile Adaptation (Capacitor Android)
 
-The same web app is distributed through three shells: Electron / Tauri (desktop) and Capacitor WebView (Android APK). Key mobile adaptation mechanisms:
+The same web app is distributed through two shells: Tauri (Windows desktop) and Capacitor WebView (Android APK). Key mobile adaptation mechanisms:
 
 **Touch detection (single source)** — `useIsTouch`: auto-detection via `matchMedia('(hover: none), (pointer: coarse)')`, overridable with `localStorage['force-touch']='1'/'0'` (debug only, no UI toggle). No scattered matchMedia across the app.
 

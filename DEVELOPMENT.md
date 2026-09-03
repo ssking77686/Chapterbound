@@ -31,11 +31,14 @@ npm run lint      # oxlint 代码检查
 npx cap sync android        # 把 dist/ 复制进 android/app/src/main/assets/public + 同步原生配置
 cd android && ./gradlew assembleDebug   # 构建 debug APK（产物：android/app/build/outputs/apk/debug/app-debug.apk）
 
-# 桌面壳
-npm run electron:dev        # Electron 开发模式
-npm run electron:build      # 打包 Windows EXE（输出到 release/，离线使用 electron-dist/ 本地运行时）
-npm run tauri               # Tauri CLI
+# 桌面壳（Tauri v2，唯一桌面分发）
+npm run desktop:dev         # 开发模式（自动起 Vite dev + 编译运行）
+npm run desktop:build       # 打包 Windows 安装包（NSIS，产物：src-tauri/target/release/bundle/nsis/Chapterbound_1.4.0_x64-setup.exe）
 ```
+
+> **桌面（Tauri）构建环境**：rustup `x86_64-pc-windows-gnu` 工具链 + MSYS2 mingw64（`C:\msys64`）。链路依赖三样外部工具，缺一不可：① binutils 的 `dlltool.exe`（raw-dylib 导入库）→ `C:\msys64\mingw64\bin`（需在 PATH，且**未持久化到用户环境变量**时每个新会话需自行 `export PATH="$PATH:C:/msys64/mingw64/bin"`）；② `~/.cargo/config.toml` 已把 linker 指向 rustup 自带的 `rust-lld.exe`（GNU 工具链不自带 gcc，链接无需外置 gcc）；③ **mingw `gcc`**（`pacman -S mingw-w64-x86_64-gcc`）——windres 预处理 `resource.rc` 时会调用 `gcc -E`，缺失时 tauri-build 静默失败（表现为 stdout 以 `package.metadata does not exist` 信息行收尾后 exit 101，真正的报错被 tauri-winres 的 `.unwrap()` 吞掉，需手动跑 windres 复现）。MSYS2 仓库镜像见 `/etc/pacman.d/mirrorlist.mingw`（本机已配 TUNA `…/msys2/mingw/$repo`，注意 ucrt64/clang64 不在 TUNA 上）。
+
+> **国内网络打包注意**：`tauri build` 会从 GitHub Releases 下载 NSIS 工具链（tauri-bundler 2.9.4 需两个资产：`nsis-3.11.zip`（SHA1 `ef7ff767…bb10d`）与 `nsis_tauri_utils-v0.5.3` 的 dll（SHA1 `75197fee…9b860`））。GitHub 直连会 502。两种解法：① 设 `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR=https://gh-proxy.com/https://github.com`（值 = 代理前缀 + 完整 github 域名）重跑；② 最稳——手动经代理下载两个资产，把 zip 剥掉 `nsis-3.11/` 顶层解压到 `%LOCALAPPDATA%\tauri\NSIS`，dll 放入 `Plugins\x86-unicode\additional\`（bundler 校验必需文件齐全即跳过下载）。本机已预置，直接 `npm run desktop:build` 即可。
 
 > **Android 构建环境**（见下文「移动端适配」）：JDK 21 + Android SDK（platform 36、build-tools 34.0.0）。国内网络需配置 Maven/Gradle 镜像（`~/.gradle/init.gradle` + `android/gradle/wrapper/gradle-wrapper.properties`），`android/local.properties` 的 `sdk.dir` 必须用正斜杠（`sdk.dir=C:/android-sdk`，反斜杠会被 Java Properties 转义吞掉）。
 
@@ -103,7 +106,7 @@ motion/react 提供，三套 spring 配置：
 
 ### 移动端适配（Capacitor Android）
 
-同一份 Web 应用通过三种壳分发：Electron / Tauri（桌面）、Capacitor WebView（Android APK）。移动端适配的几条关键机制：
+同一份 Web 应用通过两种壳分发：Tauri（Windows 桌面）、Capacitor WebView（Android APK）。移动端适配的几条关键机制：
 
 **触屏判定（单源）** — `useIsTouch`：`matchMedia('(hover: none), (pointer: coarse)')` 自动检测，`localStorage['force-touch']='1'/'0'` 可强制覆盖（调试用，无 UI 入口）。全应用不散落 matchMedia。
 
