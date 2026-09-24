@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>--safe-top 对照诊断页</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 20px 16px 40px;
+    background: #17171a; color: #e8e8ea;
+    font: 13px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  h1 { font-size: 17px; margin: 0 0 6px; }
+  .sub { color: #9a9aa2; margin: 0 0 20px; max-width: 820px; }
+  .sub code { background: #26262b; padding: 1px 5px; border-radius: 4px; color: #e0c9a6; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; }
+  .case { }
+  .cap { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .cap b { color: #e0c9a6; }
+  .cap small { display: block; font-weight: 400; color: #8b8b93; font-size: 12px; margin-top: 3px; max-width: 360px; }
+  .phone {
+    position: relative; width: 360px; height: 800px; margin-top: 10px;
+    border: 2px solid #3a3a42; border-radius: 10px; overflow: hidden; background: #000;
+  }
+  iframe { width: 360px; height: 800px; border: 0; display: block; }
+  .stat { margin-top: 10px; font-size: 12px; color: #8b8b93; }
+  .stat b { color: #7ee0a8; }
+  .stat span.bad { color: #ff7a7a; }
+  #log { margin-top: 24px; font: 12px/1.7 ui-monospace, Consolas, monospace; color: #7d7d86; white-space: pre-wrap; border-top: 1px solid #2a2a30; padding-top: 12px; }
+</style>
+</head>
+<body>
+  <h1>--safe-top 对照诊断页（临时文件，可删）</h1>
+  <p class="sub">
+    两栏都是<strong>真实应用</strong>跑在 360×800 的 iframe 里，只把 CSS 变量
+    <code>--safe-top</code> 分别注入不同值 —— 注入方式与 Android 端
+    <code>MainActivity.injectSafeAreaTop()</code> 完全一致（写在 <code>&lt;html&gt;</code> 的行内样式 + <code>data-safe-top-injected</code> 标记）。
+    斜纹带 = 24dp 的手机状态栏，红线之间 = 工具栏内容距状态栏下沿的净空。
+  </p>
+
+  <div class="row" id="row"></div>
+  <div id="log"></div>
+
+<script>
+const CASES = [
+  {
+    id: 'a', value: '63px', title: '现状', highlight: '注入 63px',
+    note: '模拟密度 2.625 的机器：24dp 状态栏被物理像素 63 直接拼上 px 注入，被当成 63dp 使用 —— 放大 2.625 倍。',
+  },
+  {
+    id: 'b', value: '24px', title: '修正后', highlight: '注入 24px',
+    note: '除以 density 之后：--safe-top 等于状态栏的真实 dp 高度，顶栏只留 8px 基数。',
+  },
+]
+const SB_H = 24 // 参考状态栏高度（dp）
+
+const log = (m) => { document.getElementById('log').textContent += m + '\n' }
+
+const row = document.getElementById('row')
+for (const c of CASES) {
+  row.insertAdjacentHTML('beforeend', `
+    <div class="case">
+      <div class="cap">${c.title} — <b>${c.highlight}</b><small>${c.note}</small></div>
+      <div class="phone"><iframe id="fr-${c.id}" src="/"></iframe></div>
+      <div class="stat" id="st-${c.id}">等待中…</div>
+    </div>`)
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const frame = (c) => document.getElementById('fr-' + c.id)
+const load = (c) => new Promise((res) => { const f = frame(c); f.onload = res; f.contentWindow.location.reload() })
+
+async function boot() {
+  // ── 阶段 1：让应用播种测试书（onboarding 未 dismiss 时 ensureTestData 才会跑）
+  try { localStorage.setItem('force-touch', '1') } catch {}
+  try { localStorage.removeItem('ereader-onboarding-dismissed-v1') } catch {}
+  log('阶段 1/2：等应用播种测试书…')
+  await sleep(4000)
+
+  // ── 阶段 2：关引导 → 重载 → 注入 --safe-top → 进阅读器 → 量
+  log('阶段 2/2：关引导、注入 --safe-top、进阅读器')
+  try { localStorage.setItem('ereader-onboarding-dismissed-v1', 'true') } catch {}
+
+  for (const c of CASES) {
+    await load(c)
+    await sleep(1800)
+
+    const doc = frame(c).contentDocument
+    doc.documentElement.setAttribute('data-safe-top-injected', '1')
+    doc.documentElement.style.setProperty('--safe-top', c.value)
+
+    const card = doc.querySelector('[data-onboarding-id="test-book"]')
+    if (!card) { document.getElementById('st-' + c.id).innerHTML = '<span class="bad">❌ 测试书不存在，重开本页试一次</span>'; continue }
+    card.click()
+
+    // 等 epub 渲染 + 工具栏出现
+    let btn = null
+    for (let i = 0; i < 40; i++) {
+      await sleep(250)
+      btn = doc.querySelector('[aria-label="添加书签"]')
+      if (btn) break
+    }
+    if (!btn) { document.getElementById('st-' + c.id).innerHTML = '<span class="bad">❌ 阅读器未就绪</span>'; continue }
+    await sleep(2600)
+
+    const top = Math.round(btn.getBoundingClientRect().top)
+    const gap = top - SB_H
+
+    // 在 iframe 内部画参考带（坐标与 iframe 视口一致）
+    doc.getElementById('__diag')?.remove()
+    const d = doc.createElement('div')
+    d.id = '__diag'
+    d.style.cssText = 'position:fixed;inset:0;z-index:99999;pointer-events:none;font:11px system-ui'
+    d.innerHTML =
+      `<div style="position:absolute;top:0;left:0;right:0;height:${SB_H}px;` +
+      `background:repeating-linear-gradient(45deg,rgba(0,0,0,.55) 0 6px,rgba(0,0,0,.30) 6px 12px);` +
+      `color:#fff;display:flex;align-items:center;justify-content:center;text-shadow:0 1px 2px #000">` +
+      `系统状态栏 ${SB_H}dp</div>` +
+      (gap > 0
+        ? `<div style="position:absolute;top:${SB_H}px;left:0;right:0;height:${gap}px;` +
+          `border-top:2px dashed #ff5a5a;border-bottom:2px dashed #ff5a5a;box-sizing:border-box;` +
+          `background:rgba(255,90,90,.13);color:#ff8080;display:flex;align-items:center;justify-content:center;` +
+          `text-shadow:0 1px 2px #000">净空 ${gap}px</div>`
+        : '')
+    doc.body.appendChild(d)
+
+    document.getElementById('st-' + c.id).innerHTML =
+      `--safe-top = <b>${c.value}</b> · 工具栏内容 y=${top} · 净空 <b>${gap}px</b>`
+    log(`  ${c.title}：--safe-top=${c.value} → 按钮 y=${top}，净空 ${gap}px`)
+  }
+  log('完成。')
+}
+
+boot().catch((e) => log('出错：' + e.message))
+</script>
+</body>
+</html>
