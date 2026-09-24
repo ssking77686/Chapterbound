@@ -251,7 +251,7 @@ function geomSignature(doc: Document): string {
  * 此时量出来的「越界」全是假的。motion 的弹簧是 rAF 驱动的，不在 document.getAnimations()
  * 里，所以只能靠「连续几帧矩形不变」来判断，不能靠动画 API。
  */
-async function waitForSettled(doc: Document): Promise<{ ms: number; timedOut: boolean }> {
+export async function waitForSettled(doc: Document): Promise<{ ms: number; timedOut: boolean }> {
   const win = doc.defaultView
   if (!win) return { ms: 0, timedOut: false }
   const t0 = performance.now()

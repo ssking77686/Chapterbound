@@ -88,6 +88,12 @@ select {
   color: var(--c-accent);
 }
 
+/* 有违规时的计数 —— 唯一一处用红色，别到处用，否则会脱敏 */
+.chip.bad {
+  border-color: color-mix(in srgb, var(--c-i1) 60%, transparent);
+  color: var(--c-i1);
+}
+
 .body {
   display: flex;
   flex: 1;
@@ -103,6 +109,11 @@ select {
   padding: 12px;
   background: var(--c-panel);
   border-right: 1px solid var(--c-border);
+}
+
+/* 收起左栏 —— 把宽度全让给被框住的应用 */
+.side.collapsed {
+  display: none;
 }
 
 .group {
@@ -269,6 +280,50 @@ input[type='range'] {
   background: #fff;
 }
 
+/* ── 双窗对照 ─────────────────────────────────────────── */
+
+.stage.dual {
+  gap: 16px;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+
+.pane-caption-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.pane-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--c-dim);
+  min-height: 18px;
+}
+
+.pane-caption .tag {
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.pane-caption .tag.on {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+
 .frame-scale {
   position: relative;
   transform-origin: top left;
@@ -353,11 +408,22 @@ input[type='range'] {
 
 .results {
   flex: none;
-  max-height: 42vh;
+  max-height: 30vh;
   overflow-y: auto;
   border-top: 1px solid var(--c-border);
   background: var(--c-panel);
-  padding: 10px 14px 16px;
+  padding: 8px 14px 14px;
+}
+
+/* 收起结果区：只留标题行，把高度全让给被框住的应用 */
+.results.collapsed {
+  max-height: none;
+  overflow: hidden;
+  padding-bottom: 8px;
+}
+
+.results.collapsed .results-body {
+  display: none;
 }
 
 .results h2 {
@@ -367,6 +433,21 @@ input[type='range'] {
   display: flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.results h2 .caret {
+  color: var(--c-dim);
+  font-size: 10px;
+}
+
+/* 紧凑按钮：顶栏与控制区里的小开关 */
+button.btn.tiny {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  text-align: center;
 }
 
 .results h2 .count {
