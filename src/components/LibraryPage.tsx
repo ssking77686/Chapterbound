@@ -111,7 +111,9 @@ export function LibraryPage({ onOpenBook }: Props) {
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
           boxShadow: scrolled ? '0 1px 0 0 var(--color-separator)' : 'none',
-          paddingTop: 'calc(0.75rem + var(--safe-top))',
+          // 净空 = 状态栏高度 + 8px。那 8px 是给安卓顶部防误触/下拉通知区的：
+          // 它通常比状态栏本身更高，贴边那一横带点不动（历史 bug 清单里的「顶栏无法点击」）。
+          paddingTop: 'calc(1.25rem + var(--safe-top))',
           paddingLeft: 'calc(1rem + var(--safe-left))',
           paddingRight: 'calc(1rem + var(--safe-right))',
         }}
