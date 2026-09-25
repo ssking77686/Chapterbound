@@ -383,6 +383,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
           paddingTop: 'calc(0.5rem + var(--safe-top))',
+          paddingLeft: 'calc(0.5rem + var(--safe-left))',
+          paddingRight: 'calc(0.5rem + var(--safe-right))',
         }}
         animate={{
           opacity: toolbarVisible ? 1 : 0.3,
@@ -406,98 +408,102 @@ export function ReaderPage({ bookId, onBack }: Props) {
         >
           {book?.title ?? '阅读中'}
         </span>
-        <div className="relative">
-          <motion.button
-            ref={bookmarkScope}
-            onClick={handleBookmarkClick}
-            className="icon-btn rounded-full p-2.5"
-            whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
-            whileTap={{ scale: 0.94 }}
-            transition={springPress}
-            style={{ color: currentBookmark()?.color ?? 'var(--color-text)' }}
-            aria-label="添加书签"
-          >
-            <Bookmark
-              className="h-5 w-5"
-              fill={currentBookmark() ? (currentBookmark()!.color) : 'none'}
-            />
-          </motion.button>
-          <AnimatePresence>
-            {pickerOpen && (
-              <>
-                <motion.div
-                  className="fixed inset-0 z-10"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  onClick={() => {
-                    setPickerOpen(false)
-                    history.replaceState({ reader: true }, '')
-                  }}
-                />
-                <motion.div
-                  className="absolute right-0 top-full z-20 mt-2 flex gap-2 rounded-2xl px-3 py-2.5"
-                  style={{
-                    background: toolbarBg,
-                    backdropFilter: toolbarBlur,
-                    WebkitBackdropFilter: toolbarBlur,
-                    boxShadow: 'var(--shadow-float)',
-                    border: '1px solid var(--color-separator)',
-                  }}
-                  initial={{ scale: 0.7, opacity: 0, y: -8 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.7, opacity: 0, y: -8 }}
-                  transition={springBounce}
-                >
-                  {bookmarkColors.map((c) => (
-                    <motion.button
-                      key={c.value}
-                      className="rounded-full"
-                      style={{
-                        width: isTouch ? 32 : 22,
-                        height: isTouch ? 32 : 22,
-                        background: c.value,
-                        boxShadow: `0 0 0 2px var(--color-card), 0 2px 8px ${c.value}40`,
-                      }}
-                      whileHover={{ scale: 1.3 }}
-                      whileTap={{ scale: 0.9 }}
-                      transition={springPress}
-                      onClick={() => handlePickColor(c.value)}
-                      aria-label={c.name}
-                    />
-                  ))}
-                  <div
-                    className="mx-0.5 self-stretch"
-                    style={{
-                      width: 1,
-                      background: 'var(--color-separator)',
-                    }}
-                  />
+        <motion.button
+          ref={bookmarkScope}
+          onClick={handleBookmarkClick}
+          className="icon-btn rounded-full p-2.5"
+          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+          whileTap={{ scale: 0.94 }}
+          transition={springPress}
+          style={{ color: currentBookmark()?.color ?? 'var(--color-text)' }}
+          aria-label="添加书签"
+        >
+          <Bookmark
+            className="h-5 w-5"
+            fill={currentBookmark() ? (currentBookmark()!.color) : 'none'}
+          />
+        </motion.button>
+        {/* 取色气泡直接挂在 header 下（header 自身 relative）——锚点是屏幕右缘，不是按钮右缘。
+            按钮右侧还排着主题/目录/图鉴/设置 4 个图标，锚按钮右缘会让 270px 宽的气泡
+            向左溢出屏幕；触屏下按钮被 .icon-btn 撑到 44px，溢出更严重（<470px 视口即开始，
+            360px 机上 5 个色块有 3 个既看不见也点不到）。 */}
+        <AnimatePresence>
+          {pickerOpen && (
+            <>
+              <motion.div
+                className="fixed inset-0 z-10"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => {
+                  setPickerOpen(false)
+                  history.replaceState({ reader: true }, '')
+                }}
+              />
+              <motion.div
+                className="absolute top-full z-20 mt-2 flex gap-2 rounded-2xl px-3 py-2.5"
+                style={{
+                  // 贴屏幕右缘（含横屏刘海安全区），不再贴按钮右缘
+                  right: 'calc(0.5rem + var(--safe-right))',
+                  background: toolbarBg,
+                  backdropFilter: toolbarBlur,
+                  WebkitBackdropFilter: toolbarBlur,
+                  boxShadow: 'var(--shadow-float)',
+                  border: '1px solid var(--color-separator)',
+                }}
+                initial={{ scale: 0.7, opacity: 0, y: -8 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.7, opacity: 0, y: -8 }}
+                transition={springBounce}
+              >
+                {bookmarkColors.map((c) => (
                   <motion.button
-                    className="flex items-center justify-center rounded-full"
+                    key={c.value}
+                    className="rounded-full"
                     style={{
                       width: isTouch ? 32 : 22,
                       height: isTouch ? 32 : 22,
-                      background: 'var(--color-card)',
-                      border: '1px solid var(--color-separator)',
+                      background: c.value,
+                      boxShadow: `0 0 0 2px var(--color-card), 0 2px 8px ${c.value}40`,
                     }}
                     whileHover={{ scale: 1.3 }}
                     whileTap={{ scale: 0.9 }}
                     transition={springPress}
-                    onClick={() => {
-                      setPickerOpen(false)
-                      history.replaceState({ reader: true }, '')
-                    }}
-                    aria-label="关闭"
-                  >
-                    <X className="h-2.5 w-2.5" style={{ color: 'var(--color-text-secondary)' }} />
-                  </motion.button>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+                    onClick={() => handlePickColor(c.value)}
+                    aria-label={c.name}
+                  />
+                ))}
+                <div
+                  className="mx-0.5 self-stretch"
+                  style={{
+                    width: 1,
+                    background: 'var(--color-separator)',
+                  }}
+                />
+                <motion.button
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: isTouch ? 32 : 22,
+                    height: isTouch ? 32 : 22,
+                    background: 'var(--color-card)',
+                    border: '1px solid var(--color-separator)',
+                  }}
+                  whileHover={{ scale: 1.3 }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={springPress}
+                  onClick={() => {
+                    setPickerOpen(false)
+                    history.replaceState({ reader: true }, '')
+                  }}
+                  aria-label="关闭"
+                >
+                  <X className="h-2.5 w-2.5" style={{ color: 'var(--color-text-secondary)' }} />
+                </motion.button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
         <motion.button
           onClick={toggleTheme}
           className="icon-btn rounded-full p-2.5"
@@ -567,7 +573,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
       </motion.header>
 
       {/* 阅读区域 */}
-      <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
+      <div
+        className="relative flex-1 overflow-hidden px-4 pb-4 pt-2"
+        style={{
+          paddingLeft: 'calc(1rem + var(--safe-left))',
+          paddingRight: 'calc(1rem + var(--safe-right))',
+        }}
+      >
         {error && pageInfo.total === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4">
             <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
@@ -922,6 +934,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 borderLeft: '1px solid var(--color-separator)',
                 paddingTop: 'var(--safe-top)',
                 paddingBottom: 'var(--safe-bottom)',
+                paddingRight: 'var(--safe-right)',
               }}
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
@@ -1631,8 +1644,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 background: 'rgba(60, 46, 36, 0.85)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
-                // 独立全屏浮层：顶部避开状态栏/刘海，否则返回键和字号键落入防误触区
+                // 独立全屏浮层：顶部避开状态栏/刘海，否则返回键和字号键落入防误触区。
+                // 左右仅横屏刘海时需要（竖屏 cutout 为 0），基数为 0 以免与内层 px-3 叠加。
                 paddingTop: 'calc(0.5rem + var(--safe-top))',
+                paddingLeft: 'var(--safe-left)',
+                paddingRight: 'var(--safe-right)',
               }}
             >
               <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-3">
@@ -1746,7 +1762,12 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
             <div
               className="mx-auto w-full max-w-2xl px-5 min-[1800px]:max-w-[1300px]"
-              style={{ zoom: settings.compendiumFontScale, paddingBottom: 'calc(2.5rem + var(--safe-bottom))' }}
+              style={{
+                zoom: settings.compendiumFontScale,
+                paddingBottom: 'calc(2.5rem + var(--safe-bottom))',
+                paddingLeft: 'calc(1.25rem + var(--safe-left))',
+                paddingRight: 'calc(1.25rem + var(--safe-right))',
+              }}
             >
               {/* 名字 */}
               <h1

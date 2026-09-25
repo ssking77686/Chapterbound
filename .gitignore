@@ -33,7 +33,9 @@ dist-ssr
 # Tauri build artifacts
 src-tauri/target/
 src-tauri/gen/
-release/                # Latest NSIS installer copy (maintained by scripts/copy-installer.mjs)
+
+# 最新安装包 / APK 副本，由 scripts/copy-*.mjs 在构建后写入（本地产物，不入库）
+release/
 
 # Rust
 *.rs.bk

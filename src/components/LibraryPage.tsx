@@ -112,6 +112,8 @@ export function LibraryPage({ onOpenBook }: Props) {
           WebkitBackdropFilter: toolbarBlur,
           boxShadow: scrolled ? '0 1px 0 0 var(--color-separator)' : 'none',
           paddingTop: 'calc(0.75rem + var(--safe-top))',
+          paddingLeft: 'calc(1rem + var(--safe-left))',
+          paddingRight: 'calc(1rem + var(--safe-right))',
         }}
       >
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-2">
@@ -174,7 +176,13 @@ export function LibraryPage({ onOpenBook }: Props) {
         </div>
       </motion.header>
 
-      <main className="mx-auto max-w-[1800px] px-4 pt-6 pb-12">
+      <main
+        className="mx-auto max-w-[1800px] px-4 pt-6 pb-12"
+        style={{
+          paddingLeft: 'calc(1rem + var(--safe-left))',
+          paddingRight: 'calc(1rem + var(--safe-right))',
+        }}
+      >
         {loading ? (
           <div className="mt-20 text-center" style={{ color: 'var(--color-text-secondary)' }}>
             加载中...
