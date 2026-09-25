@@ -207,6 +207,9 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `useReader` 中 `loadCompendium` 吞错 | 图鉴加载失败 → 空数据 | `useReader` | 保持静默（非关键路径） |
 | `bookshelfStore.importBook` 元数据解析失败静默降级 | EPUB 解析失败用文件名当标题 | `bookshelfStore.importBook` | 设计如此（降级可用优于报错） |
 | `EpubEngine` 调试日志残留 | 每次翻页打印 console.log | `EpubEngine.ts` | 已修复：已注释 |
+| 取色气泡的遮罩只有 header 那么大 | `backdrop-filter` 为 `fixed` 后代重建包含块 → 遮罩的 `inset-0` 解析成 header 尺寸（412×88），**点书页正文关不掉气泡**：交互静默失效，不报错 | `ReaderPage.tsx` | **未修**，登记在检查台的 `KNOWN_DEFECTS`（含根因与修法） |
+| `下一页` 是 24×811 的隐形热区 | 盖住气泡关闭按钮的右半边 → **点关闭按钮正中/右半边会翻页**：点到了别的东西，同样不报错 | `ReaderPage.tsx` | **未修**（检查台 I2 独立命中，`elementFromPoint` 复核过） |
+| 触屏命中区未铺满 | 气泡色块/关闭 32×32、书架顶栏 40×40、书卡封面按钮 30×30（均 < 44）；`删除` 按钮无可访问名称 | `ReaderPage.tsx`, `LibraryPage.tsx` | **未修**（检查台 I3 在触屏档下报出） |
 
 ---
 
@@ -237,9 +240,9 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/hooks/useReader.ts` | 阅读器核心 hook：引擎生命周期、进度/图鉴联动 | `useReader` |
 | `src/hooks/useTheme.ts` | 主题 hook：明暗切换 | `useTheme` |
 | `src/hooks/useKeyboard.ts` | 键盘快捷键 hook | `useKeyboard` |
-| `src/hooks/useIsTouch.ts` | 触屏检测唯一来源：`matchMedia('(hover: none), (pointer: coarse)')`，`localStorage['force-touch']` 调试覆盖 | `useIsTouch`, `detectTouch` |
+| `src/hooks/useIsTouch.ts` | 触屏检测唯一来源：`matchMedia('(hover: none), (pointer: coarse)')`，`localStorage['force-touch']` 调试覆盖；`applyTouchMode()` 把判定写到 `<html data-touch>` 供 CSS 读取（**派生值，不要直接写**） | `useIsTouch`, `detectTouch`, `applyTouchMode` |
 | `src/engines/EpubEngine.ts`（手势部分） | 触屏手势：`gesture:swipe` / `gesture:tap` 事件（仅触屏注册，桌面零注册） | `EpubEngine` 事件订阅 |
-| `src/index.css`（移动端段） | `--safe-top/--safe-bottom` 变量、触屏保底（16px，注入失败时）、`.hover-reveal` / `.icon-btn` / `.reader-touch` 工具类 | CSS 变量与类 |
+| `src/index.css`（移动端段） | 四个安全区变量、触屏保底（16px，注入失败时）、`.hover-reveal` / `.icon-btn` / `.reader-touch` 工具类；触屏规则全部挂在 `[data-touch='1']` 上，**不写 `@media (hover: none)`** | CSS 变量与类 |
 | `src/components/LibraryPage.tsx` | 书架页面：书籍列表、导入/删除/封面操作 | `LibraryPage` |
 | `src/components/ReaderPage.tsx` | 阅读器页面：渲染区 + 设置/书签/高亮/图鉴/目录侧边栏 | `ReaderPage` |
 | `src/components/OnboardingOverlay.tsx` | 引导覆盖层：9 步引导、高亮定位、跳过/永久关闭 | `OnboardingOverlay` |
@@ -250,8 +253,9 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src-tauri/` | Tauri v2 桌面壳（唯一桌面分发）：tauri.conf.json（窗口/NSIS/标识符）+ Rust 入口（无业务逻辑，debug 构建带日志插件） | — |
 | `src-tauri/src/lib.rs` | Tauri Rust 后端：WebView 配置、debug 日志插件 | — |
 | `capacitor.config.ts` | Capacitor 配置：appId `com.chapterbound.app`、webDir `dist`、Android 壳 | — |
-| `android/app/src/main/java/com/chapterbound/app/MainActivity.java` | Android 原生入口：读取状态栏 WindowInsets 注入 `--safe-top` CSS 变量（WebView 的 env() 恒为 0，必须原生注入） | `injectSafeAreaTop()` |
-| `android/app/src/main/res/values*/styles.xml` | Android 主题：`windowOptOutEdgeToEdgeEnforcement`（v35）+ 状态栏颜色对齐 Web 主题（亮/暗/夜间四变体） | — |
+| `android/app/src/main/java/com/chapterbound/app/MainActivity.java` | Android 原生入口：读取 WindowInsets 把**四个**安全区注入为 CSS 变量（WebView 的 env() 恒为 0，必须原生注入）；除以 density；`onConfigurationChanged` 重注入 | `injectSafeArea()` |
+| `android/app/src/main/res/values*/styles.xml` | Android 主题：`windowOptOutEdgeToEdgeEnforcement`（v35，**实际失效**，见 §6.2）+ 状态栏颜色对齐 Web 主题（亮/暗/夜间四变体） | — |
+| `ui-console.html` + `console/` | **开发工具**：UI 检查台（同源 iframe 跑真实应用 + 四条几何判据 + 双窗对照）。根级 HTML，不进构建产物/APK；类型检查在 `tsconfig.console.json` | `audit()`, `ConsoleApp` |
 
 ### 5.2 关键调用链速查
 
@@ -312,10 +316,11 @@ ReaderPage 设置面板 onChange
 | 修改电子书渲染行为 | `EpubEngine.ts`、`useReader.ts`、`ReaderPage.tsx`（阅读器容器和控件） |
 | 修改 EPUB 元数据提取 | `EpubParser.ts`、`bookshelfStore.ts`（importBook 中使用解析结果的逻辑） |
 | 修改数据导入导出逻辑 | `compendiumStore.ts`、`IndexedDBAdapter.ts`（importCompendium）、`ReaderPage.tsx`（导入 UI） |
-| 改移动端安全区/状态栏适配 | `MainActivity.java`（注入值）、`index.css`（`--safe-top` + 触屏保底）、`ReaderPage.tsx`（应用点 padding） |
+| 改移动端安全区/状态栏适配 | `MainActivity.java`（四个注入值）、`index.css`（四个变量 + 触屏保底）、`ReaderPage.tsx` / `LibraryPage.tsx` / `AboutOverlay.tsx`（应用点 padding） |
 | 改触屏手势（滑动/tap 翻页） | `EpubEngine.ts`（手势判定阈值）、`ReaderPage.tsx`（订阅与执行）、`useIsTouch.ts`（检测源） |
-| 改移动端侧栏/工具栏布局 | `ReaderPage.tsx` + `index.css`（`.icon-btn` 44px 命中区） |
+| 改移动端侧栏/工具栏布局 | `ReaderPage.tsx` + `index.css`（`.icon-btn` 44px 命中区；**新加可点元素记得带 `cursor-pointer`**，否则检查台看不见它） |
 | 改 Android 构建/图标/主题 | `android/app/src/main/res/`（样式与图标）、`capacitor.config.ts`、`MainActivity.java` |
+| 改/查 UI 几何问题（越界、点不到、命中区太小） | `ui-console.html` + `console/`（判据在 `console/audit.ts`，先读文件头）；改完在检查台里跑一遍 |
 
 ---
 
@@ -327,16 +332,27 @@ ReaderPage 设置面板 onChange
 
 ### 6.2 安全区注入机制（最易被误解的桥接）
 
-**为什么需要：** Android WebView 的 CSS `env(safe-area-inset-*)` 恒为 0（Chromium 在 WebView 内不填充），edge-to-edge 下内容会铺进状态栏/刘海防误触区。
+**为什么需要：** Android WebView 的 CSS `env(safe-area-inset-*)` 恒为 0（Chromium 在 WebView 内不填充），edge-to-edge 下内容会铺进状态栏/刘海/手势条。
 
-**注入链路（双层）：**
-1. `MainActivity.injectSafeAreaTop()`：读 `WindowInsetsCompat.Type.statusBars()` 高度 → `evaluateJavascript` 写入 `documentElement.style.setProperty('--safe-top', 'NNpx')` + `data-safe-top-injected='1'` 标记。页面未就绪时返回值非 `true`，300ms 后重试；insets 为空 200ms 重试。
-2. CSS 保底（`index.css`）：`@media (hover: none)` 且 **无** `data-safe-top-injected` 时 `--safe-top: max(env(), 16px)`——仅原生注入失败时生效，防止工具栏落入状态栏。
+**注入链路（真正的唯一防线）：**
+1. `MainActivity.injectSafeArea()`：读 `statusBars()` / `navigationBars()` / `displayCutout()`，**四个值一起**用 `evaluateJavascript` 写成 `documentElement.style.setProperty('--safe-{top,bottom,left,right}', 'NNpx')`，并设 `data-safe-top-injected='1'`。insets 为空 200ms 重试；`evaluateJavascript` 返回值非 `true`（页面未就绪）300ms 重试。旋转/折叠/分屏**不重建 Activity**（manifest 声明了 `configChanges`），所以 `onConfigurationChanged()` 里重新注入一次。
+2. CSS 保底（`index.css`）：`:root[data-touch='1']:not([data-safe-top-injected])` 时 `--safe-top`/`--safe-bottom` 取 `max(env(), 16px)` —— **仅原生注入失败时生效**。注意选择器读的是 `data-touch` 而不是 `@media (hover: none)`：媒体查询曾是第二处判定源，与 JS 的 `useIsTouch` 在 `force-touch` 下会分叉。
+
+**三个易错点（都踩过坑，改之前先看）：**
+
+| | 规则 | 踩坑后果 |
+|---|---|---|
+| 1 | **必须除以 `density`** —— `WindowInsetsCompat.getInsets()` 返回**物理像素**，而 WebView 里 1 CSS px = 1 dp | 漏掉这步 `--safe-top` 被放大 2.0~3.5 倍，顶栏被压低几十像素 |
+| 2 | **四个值必须与标记同步写入** —— 标记的语义是「四个都已注入」 | 只写 top 却带标记 → CSS 保底连带失效，`--safe-bottom` 掉回 0，页码胶囊压在手势条下 |
+| 3 | **顶部仍只取 `statusBars()`，不要对 `displayCutout()` 取 max** —— 竖屏刘海已含在状态栏高度内 | 取大会下移过头（如 80+px） |
+
+左/右只在**横屏刘海机**（手机横屏）非 0；平板无刘海，恒为 0。
 
 **修改注意事项：**
-- 只取 `statusBars()`，不要放宽为 `cutout` 取大——竖屏刘海已含在状态栏高度内，取大（如 80+px）会下移过头（踩过坑）
-- 注入值改动需重新 `assembleDebug`，**不要只在 Web 层改**——`--safe-top` 桌面值恒为 0，桌面永远无感
-- `values-v35/styles.xml` 的 `windowOptOutEdgeToEdgeEnforcement` 与注入是双保险，删掉任一都会回退到"工具栏落入状态栏"
+- 改**原生**注入逻辑要重新构建：`npm run android:build`（内含 `npm run build` + `cap sync`）。⚠️ **裸跑 `gradlew assembleDebug` 会打包旧的 web 产物** —— 这是比"重建"更容易踩的坑。
+- 改 **web 侧**的消费点（哪个元素吃 `--safe-*`）不需要动原生，在检查台里注入值就能验证。
+- ⚠️ **`values-v35/styles.xml` 的 `windowOptOutEdgeToEdgeEnforcement` 实际上失效**，不要把它当第一道防线：Capacitor 的 `BridgeActivity.onCreate` 会把主题换成 `AppTheme_NoActionBar`，那个主题里没有这一项，于是豁免读不到、应用真的在 edge-to-edge 下跑。**只有注入 + CSS 保底在真正生效。**（「关于面板的关闭按钮被状态栏压住」这个 bug 能出现，本身就证明了视口确实伸到状态栏下面。）
+- 验证方式：检查台（`ui-console.html`）能验证 web 侧全部消费者；但**密度换算这一环它验证不了** —— 浏览器无从判断注入的 `--safe-top: 63` 该是 24。那一环只能真机冒烟，或把换算抽成纯函数写 JVM 单测。
 
 ### 6.3 Android 特有风险清单
 
@@ -372,3 +388,4 @@ ReaderPage 设置面板 onChange
 - **更新频率：** 代码库结构变化、新的风险被发现或修复后更新相应章节
 - **定位策略：** 本文档不记录精确行号。需要定位代码时，使用文档中的模块名 + 方法名在 IDE 中搜索，或根据项目目录结构按文件名查找
 - **阅读顺序：** 建议先读项目架构文档了解整体设计，再读本文档了解风险分布，然后按需查看具体源文件
+- **UI 几何类问题（越界 / 点不到 / 命中区太小）用检查台排查，不要靠眼睛**：`npm run dev` 后打开 `http://localhost:5173/ui-console.html`。§4.3 后面那三行「未修」条目就是它查出来的。检查台本身的能力边界与待办见 `CLAUDE.md`。
