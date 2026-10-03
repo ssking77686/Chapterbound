@@ -19,6 +19,8 @@ export class EpubEngine implements IReaderEngine {
   // 触屏手势：已绑定手势的 contents（epub.js 跨 section 重建 iframe，须防重复绑定）
   private gestureBoundContents = new Set<object>()
   private touchStart: { x: number; y: number; t: number } | null = null
+  /** 重排后要钉回去的锚点（见 pinAfterResize） */
+  private anchorAfterResize: string | null = null
 
   async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
     this.containerEl = container
@@ -43,6 +45,14 @@ export class EpubEngine implements IReaderEngine {
       const total = location.start.displayed.total
       // console.debug('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
       this.emit('locationChange', cfi, progress, page, total, location.start.index)
+
+      // 重排后的第一次 relocated：把位置钉回重排前那一刻（见 pinAfterResize）。
+      // 只钉一次 —— 钉回去本身也会触发 relocated。
+      if (this.anchorAfterResize) {
+        const anchor = this.anchorAfterResize
+        this.anchorAfterResize = null
+        this.goToLocation(anchor)
+      }
     })
 
     this.rendition.on('selected', (cfiRange: string, contents: { window: { getSelection: () => Selection } }) => {
@@ -96,6 +106,7 @@ export class EpubEngine implements IReaderEngine {
     this.listeners.clear()
     this.gestureBoundContents.clear()
     this.touchStart = null
+    this.anchorAfterResize = null
   }
 
   nextPage(): void {
@@ -198,8 +209,41 @@ export class EpubEngine implements IReaderEngine {
     this.rendition.themes.override('background', colors.background)
   }
 
-  resize(width: number, height: number): void {
-    this.rendition?.resize(width, height)
+  /**
+   * 重排视口。**必须带上当前位置的 cfi**。
+   *
+   * epub.js 重排后会自己重新定位：`rendition.onResized` 里是
+   * `this.display(epubcfi || this.location.start.cfi)`（rendition.js:478）——
+   * 给它 cfi 就用它，不给就用它自己缓存的位置。而重排之后"第 N 页"对应的文字已经变了，
+   * 所以锚点必须由调用方给，否则阅读位置会漂（实测：只把视口高改 40px，从第 5 页跳到第 2 页）。
+   *
+   * 转屏 / 分屏 / 软键盘弹出 / 沉浸模式走的都是这一条路，锚点在这里统一处理。
+   *
+   * 第三个参数 epub.js 支持，但 v0.3.93 的 d.ts 只声明了两个（types/rendition.d.ts:123）
+   * —— 又一次类型缺口，用一次断言绕开。
+   * ⚠️ 光带 cfi 还不够，必须配套调 pinAfterResize —— 见那个方法的注释。
+   */
+  resize(width: number, height: number, cfi?: string): void {
+    const r = this.rendition
+    if (!r) return
+    ;(r.resize as unknown as (w: number, h: number, c?: string) => void)(width, height, cfi)
+  }
+
+  /**
+   * 重排后把阅读位置钉回 cfi。
+   *
+   * 为什么必须单独做这一步：epub.js 在 resize 内部**本来就会**重新定位 ——
+   * `rendition.onResized` 里是 `this.display(epubcfi || this.location.start.cfi)`
+   * （rendition.js:478），而 manager.resize 也接受并转发了这个 cfi。但实测它落不到那个位置：
+   * 锚点 `epubcfi(/6/2!/4/26/1:0)`、重排后落在 `epubcfi(/6/2!/4/8/1:0)`，退了 18 个段落
+   *（同时读过 epub.js 自己的缓存，值和锚点一致 —— 它知道该去哪，就是没去到）。
+   * 所以改成：重排产出的第一次 relocated 之后，由我们显式再 display 一次。
+   * `goToLocation` 就是书签跳转一直在走的路径，行为可靠。
+   *
+   * 转屏 / 分屏 / 软键盘 / 沉浸模式都经由 resize，所以锚点统一在这里兜。
+   */
+  pinAfterResize(cfi: string): void {
+    if (cfi) this.anchorAfterResize = cfi
   }
 
   async getChapterMap(): Promise<Map<number, number>> {

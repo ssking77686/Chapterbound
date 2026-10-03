@@ -185,10 +185,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
     hideTimer.current = setTimeout(() => setToolbarVisible(false), 3000)
   }, [isTouch])
 
-  // tap 中央：触屏常显下只确保显示（不隐藏）；桌面切换显隐（与 resetHideTimer 相反的方向）
+  // tap 中央：触屏切换沉浸模式（隐/显顶栏与页码）；桌面切换工具栏显隐
   const toggleToolbar = useCallback(() => {
     if (isTouch) {
-      resetHideTimer()
+      // 沉浸模式是**手动、可逆**的切换，和那条被否掉的「3 秒自动渐隐」不是一回事：
+      // 那条的问题是按钮自己消失后用户不知道去哪找回；这里隐藏和恢复是同一个动作
+      //（再点一下中间），而且顶栏原本占的位置也仍然是「点一下唤回」的热区。
+      setToolbarVisible((v) => !v)
       return
     }
     if (toolbarVisibleRef.current) {
@@ -198,6 +201,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
       resetHideTimer()
     }
   }, [isTouch, resetHideTimer])
+
+  // 沉浸模式（仅触屏）：顶栏与页码一起隐藏。桌面恒为 false —— 桌面顶栏是渐隐到 0.3，不隐藏。
+  const chromeHidden = isTouch && !toolbarVisible
 
   // ── Android 返回键逐层退出（popstate 阶段；Phase 3 由 Capacitor backButton 叠加） ──
   // 覆盖层栈：图鉴详情 > 侧栏 > 阅读器。popstate 处理器只读 ref，不依赖闭包捕获的 state。
@@ -375,14 +381,22 @@ export function ReaderPage({ bookId, onBack }: Props) {
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
     >
-      {/* 材质化工具栏 — 自动渐隐 */}
+      {/* 材质化工具栏 — 桌面自动渐隐；触屏由「点中间」切换沉浸模式 */}
       <motion.header
         className="relative z-10 flex items-center gap-1 px-2 py-2"
         style={{
           background: toolbarBg,
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
-          paddingTop: 'calc(0.5rem + var(--safe-top))',
+          // 沉浸模式下用 display:none 而不是「透明 + pointer-events:none」：一次同时做到
+          // ①从布局里移除（把这条高度还给正文，卡片随之变高）②不可点击。
+          // 分成两个属性写迟早会漏一个 —— 项目里已经有「看不见却可点」的旧账。
+          // 刻意**不做高度动画**：高度每变一帧，useReader 的 ResizeObserver 就会触发一次
+          // engine.resize() → epub.js 重排一次，那会变成十几连排。
+          display: chromeHidden ? 'none' : undefined,
+          // 净空 = 状态栏高度 + 8px。那 8px 是给安卓顶部防误触/下拉通知区的：
+          // 它通常比状态栏本身更高，贴边那一横带点不动（历史 bug 清单里的「顶栏无法点击」）。
+          paddingTop: 'calc(1rem + var(--safe-top))',
           paddingLeft: 'calc(0.5rem + var(--safe-left))',
           paddingRight: 'calc(0.5rem + var(--safe-right))',
         }}
@@ -881,9 +895,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
       )}
       </div>
 
-      {/* 页码 — 浮动胶囊 */}
+      {/* 页码 — 浮动胶囊（沉浸模式下一并隐去） */}
       <AnimatePresence>
-        {pageInfo.total > 0 && (
+        {pageInfo.total > 0 && !chromeHidden && (
           <motion.div
             className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2"
             key={pageKey}
