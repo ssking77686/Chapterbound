@@ -5,7 +5,7 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download, Search } from 'lucide-react'
+import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download, Search, Copy } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore'
@@ -13,6 +13,7 @@ import { useToastStore } from '../stores/toastStore'
 import type { TOCItem } from '../core/types'
 import { PAGE_THEME_PRESETS } from '../data/themes'
 import { useIsTouch } from '../hooks/useIsTouch'
+import { makeFingerprint, encodeRelayCode, parseRelayInput } from '../utils/positionCode'
 
 interface Props {
   bookId: string
@@ -62,6 +63,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [visibleCount, setVisibleCount] = useState(50)
   const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
   const [selResults, setSelResults] = useState<SearchResult[] | null>(null)
+  // 位置接力（设置面板内）：定位点就绪状态 / 生成的卡片 / 待解析的输入
+  const [relayReady, setRelayReady] = useState(false)
+  const [relayCard, setRelayCard] = useState<{ text: string; code: string } | null>(null)
+  const [relayInput, setRelayInput] = useState('')
 
   const [toc, setToc] = useState<TOCItem[]>([])
   const [sidebarTab, setSidebarTab] = useState<'toc' | 'bookmarks' | 'compendium' | 'settings' | null>(null)
@@ -171,6 +176,25 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setSelData(null)
     setSelResults(null)
   }, [pageKey])
+
+  // 位置接力：设置面板打开期间轮询定位点就绪（locations 在 load 后异步生成，一般几秒内完成）
+  useEffect(() => {
+    if (sidebarTab !== 'settings') return
+    const engine = getEngine()
+    if (!engine) return
+    if (engine.isLocationsReady()) {
+      setRelayReady(true)
+      return
+    }
+    setRelayReady(false)
+    const timer = setInterval(() => {
+      if (getEngine()?.isLocationsReady()) {
+        setRelayReady(true)
+        clearInterval(timer)
+      }
+    }, 600)
+    return () => clearInterval(timer)
+  }, [sidebarTab, getEngine])
 
   const toolbarVisibleRef = useRef(true)
   useEffect(() => {
@@ -359,6 +383,120 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setRelationsExpanded(false)
     history.replaceState({ reader: true, detail: id }, '')
   }, [])
+
+  // ── 位置接力：生成端与接收端 ──
+
+  const copyRelayText = useCallback(async (text: string, okMsg: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      useToastStore.getState().toast(okMsg, 'success')
+    } catch {
+      // 降级：临时 textarea + execCommand（WebView 里 clipboard API 偶尔不可用）
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        const ok = document.execCommand('copy')
+        ta.remove()
+        useToastStore.getState().toast(ok ? okMsg : '复制失败，请长按选择文本手动复制', ok ? 'success' : 'error')
+      } catch {
+        useToastStore.getState().toast('复制失败，请长按选择文本手动复制', 'error')
+      }
+    }
+  }, [])
+
+  const handleGenerateRelayCard = useCallback(async () => {
+    const engine = getEngine()
+    if (!engine) return
+    if (!engine.isLocationsReady()) {
+      useToastStore.getState().toast('定位点还在生成，稍等几秒再试', 'info')
+      return
+    }
+    const cfi = engine.getCurrentLocation()
+    const index = engine.getCurrentLocationIndex()
+    if (!cfi || index < 0) {
+      useToastStore.getState().toast('拿不到当前位置', 'error')
+      return
+    }
+    const percent = engine.getCurrentPercent()
+    const label = await engine.getChapterLabelForSpine(engine.getCurrentSpineIndex())
+    const chapterNum = getCurrentChapter()
+    const chapterText = label ?? (chapterNum > 0 ? `第 ${chapterNum} 章` : '')
+    const excerpt = engine.getNearbyText(50)
+    const fingerprint = makeFingerprint(engine.getFileSize(), engine.getFileHead())
+    const code = encodeRelayCode(fingerprint, index)
+    const head = [
+      `《${book?.title ?? '未命名'}》`,
+      book && book.author && book.author !== 'Unknown' ? book.author : '',
+      chapterText,
+      `${(percent * 100).toFixed(1)}%`,
+    ].filter(Boolean).join(' · ')
+    const lines = [head]
+    if (excerpt) lines.push(`「${excerpt}」`)
+    lines.push(cfi)
+    lines.push(code)
+    setRelayCard({ text: lines.join('\n'), code })
+  }, [getEngine, getCurrentChapter, book])
+
+  const handleRelayJump = useCallback(() => {
+    const engine = getEngine()
+    if (!engine) return
+    const toast = useToastStore.getState().toast
+    const parsed = parseRelayInput(relayInput)
+    // 书名校验（整卡第一行的《书名》）：不匹配硬拒绝——位置语义跨书本来就不成立
+    if (parsed.title && book?.title && parsed.title !== book.title) {
+      toast(`这码来自《${parsed.title}》，请先打开那本书`, 'error', 4000)
+      return
+    }
+    // 跳转后统一收尾：清输入、关设置面板（与目录/书签点击一致）、报落点
+    const finish = (percentText: string) => {
+      setRelayInput('')
+      setSidebarTab(null)
+      history.replaceState({ reader: true }, '')
+      toast(`已跳到 · ${percentText}`, 'success')
+    }
+    // 短码在 → 先过"书身份"闸（指纹）。它只做校验：跳转坐标另有优先级。
+    if (parsed.shortcode) {
+      const fingerprint = makeFingerprint(engine.getFileSize(), engine.getFileHead())
+      if (parsed.shortcode.fingerprint !== fingerprint) {
+        toast('这码属于另一本书（指纹不匹配）', 'error', 4000)
+        return
+      }
+    }
+    // 坐标三选一：整卡里的 CFI 最精确（同一文件下逐字复现，跨设备同一点）；
+    // 只有短码时用定位点序号（±约一段）；最后才是百分比。
+    if (parsed.cfi) {
+      engine.goToLocation(parsed.cfi)
+      finish(`${engine.getProgressForLocation(parsed.cfi)}%`)
+      return
+    }
+    if (parsed.shortcode) {
+      engine.goToLocationIndex(parsed.shortcode.locationIndex)
+      finish(`${(engine.getPercentForIndex(parsed.shortcode.locationIndex) * 100).toFixed(1)}%`)
+      return
+    }
+    if (parsed.percent != null) {
+      if (!(parsed.percent >= 0 && parsed.percent <= 100)) {
+        toast('百分比超出范围', 'error')
+        return
+      }
+      engine.goToPercentage(parsed.percent / 100)
+      finish(`${parsed.percent.toFixed(1)}%`)
+      return
+    }
+    if (parsed.shortcodeError) {
+      toast(parsed.shortcodeError === 'version' ? '这码来自另一个版本的 App（或抄错了）' : '码可能抄错了，检查一下', 'error', 4000)
+      return
+    }
+    if (parsed.title) {
+      toast(`只认出了书名《${parsed.title}》，没有位置信息`, 'error')
+      return
+    }
+    toast('没认出这条位置码', 'error')
+  }, [relayInput, getEngine, book])
 
   const toolbarBg = 'var(--color-toolbar)'
   const toolbarBlur = 'blur(24px) saturate(180%)'
@@ -1632,6 +1770,107 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         animate={{ x: settings.showProgressBar ? 20 : 3 }}
                         transition={{ type: 'spring' as const, bounce: 0, duration: 0.25 }}
                       />
+                    </motion.button>
+                  </div>
+
+                  {/* 位置接力 —— 跨设备手动搬运阅读位置（无需云同步） */}
+                  <div className="border-t pt-6" style={{ borderColor: 'var(--color-separator)' }}>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      位置接力
+                    </p>
+                    <p
+                      className="mb-3 text-xs leading-[1.7]"
+                      style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}
+                    >
+                      换设备阅读时：先在这里复制位置卡片，在另一台设备打开同一本书后，粘贴到下框里即可直达。
+                    </p>
+
+                    {/* 生成位置卡片 */}
+                    <motion.button
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
+                      style={{
+                        background: relayReady ? 'var(--color-accent)' : 'var(--color-separator)',
+                        color: relayReady ? '#fff' : 'var(--color-text-secondary)',
+                      }}
+                      whileHover={relayReady ? { scale: 1.02 } : undefined}
+                      whileTap={relayReady ? { scale: 0.98 } : undefined}
+                      transition={springPress}
+                      onClick={handleGenerateRelayCard}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {relayReady ? '生成位置卡片' : '定位点生成中…'}
+                    </motion.button>
+
+                    {relayCard && (
+                      <div className="mt-3">
+                        <div
+                          className="select-text whitespace-pre-wrap rounded-xl px-3 py-2.5 text-xs leading-[1.9]"
+                          style={{
+                            background: 'var(--color-card)',
+                            border: '1px solid var(--color-separator)',
+                            color: 'var(--color-text)',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          {relayCard.text}
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <motion.button
+                            className={`flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs ${isTouch ? 'min-h-11' : ''}`}
+                            style={{ color: 'var(--color-text)', border: '1px solid var(--color-separator)' }}
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            transition={springPress}
+                            onClick={() => copyRelayText(relayCard.text, '位置卡片已复制')}
+                          >
+                            <Copy className="h-3 w-3" />
+                            复制卡片
+                          </motion.button>
+                          <motion.button
+                            className={`flex flex-1 items-center justify-center rounded-full px-3 py-1.5 text-xs ${isTouch ? 'min-h-11' : ''}`}
+                            style={{ color: 'var(--color-text)', border: '1px solid var(--color-separator)' }}
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            transition={springPress}
+                            onClick={() => copyRelayText(relayCard.code, '短码已复制')}
+                          >
+                            只复制短码
+                          </motion.button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 输入位置码（整卡 / 短码 / 百分比都行） */}
+                    <textarea
+                      className={`mt-4 w-full resize-none rounded-lg px-3 py-2.5 text-sm outline-none ${isTouch ? 'min-h-11' : ''}`}
+                      style={{
+                        background: 'var(--color-card)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-separator)',
+                      }}
+                      rows={3}
+                      placeholder="粘贴位置卡片 / 短码 / 百分比…"
+                      value={relayInput}
+                      onChange={(e) => setRelayInput(e.target.value)}
+                    />
+                    <motion.button
+                      className={`mt-2 flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
+                      style={{
+                        background: 'var(--color-accent)',
+                        color: '#fff',
+                        opacity: relayInput.trim() ? 1 : 0.5,
+                      }}
+                      whileHover={relayInput.trim() ? { scale: 1.02 } : undefined}
+                      whileTap={relayInput.trim() ? { scale: 0.98 } : undefined}
+                      transition={springPress}
+                      onClick={handleRelayJump}
+                      disabled={!relayInput.trim()}
+                    >
+                      跳转
                     </motion.button>
                   </div>
                 </div>

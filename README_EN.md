@@ -102,6 +102,7 @@ npm run android:build   # runs build + cap sync + assembleDebug; APK is copied t
 - Immersive mode (touch only): tap the middle of the text to hide the toolbar and page number, giving one to two lines back; tap again to restore. The left/right thirds still turn pages
 - Fixed the reading position drifting after a reflow: rotating, split-screen, the soft keyboard appearing, and toggling immersive mode no longer jump pages (it could previously jump several pages back, or to the start of the chapter)
 - Toolbar moved down 8px: clears the system anti-accidental-touch / notification-shade zone that made the toolbar untappable
+- Position relay: generate a portable position card (plus a short code) for your current spot; paste or type it into the same book on another device to jump straight there — manual cross-device position hand-off, no cloud sync needed
 
 **v1.5.0** (2026-09)
 - Desktop migrated to Tauri v2: Electron removed; NSIS installer (`npm run desktop:build`, ~4.5 MB) rendered by the native Windows WebView2
