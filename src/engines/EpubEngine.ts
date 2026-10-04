@@ -351,33 +351,62 @@ export class EpubEngine implements IReaderEngine {
     }
   }
 
-  /** 按百分比跳转（位置码的降级路径） */
-  goToPercentage(p: number): void {
-    if (!this.book || this.book.locations.length() === 0) return
+  /**
+   * 按百分比跳转（位置码的降级路径）。
+   * 返回"是否真的发起了跳转"：定位点未就绪等情况返回 false，由调用方报错——
+   * 位置接力里不许出现"面板关了、提示说已跳到，但其实什么都没发生"。
+   */
+  goToPercentage(p: number): boolean {
+    if (!this.book || !this.rendition || this.book.locations.length() === 0) return false
     const clamped = Math.min(1, Math.max(0, p))
     try {
       const cfi = this.book.locations.cfiFromPercentage(clamped)
-      if (cfi && typeof cfi === 'string') this.rendition?.display(cfi)
+      if (cfi && typeof cfi === 'string') {
+        this.rendition.display(cfi)
+        return true
+      }
     } catch {
-      /* 定位点未就绪等情况：静默不动 */
+      /* 定位点未就绪等情况 */
     }
+    return false
   }
 
   /**
-   * 按定位点序号跳转（短码路径）。
+   * 按定位点序号跳转（短码路径）。返回是否真的发起了跳转（语义同上）。
    * 落点 = 该定位点起点 —— 定位点按书文本内容生成、与排版无关，
    * 同一个书文件在两台设备上序号↔文本完全一致，所以短码跨设备才成立。
    */
-  goToLocationIndex(index: number): void {
-    if (!this.book) return
+  goToLocationIndex(index: number): boolean {
+    if (!this.book || !this.rendition) return false
     const n = this.book.locations.length()
-    if (n <= 0) return
+    if (n <= 0) return false
     const i = Math.min(n - 1, Math.max(0, Math.round(index)))
     try {
       const cfi = this.book.locations.cfiFromLocation(i)
-      if (cfi && typeof cfi === 'string') this.rendition?.display(cfi)
+      if (cfi && typeof cfi === 'string') {
+        this.rendition.display(cfi)
+        return true
+      }
     } catch {
       /* 同上 */
+    }
+    return false
+  }
+
+  /**
+   * 位置接力专用：跳转前先验证 CFI 能解析、且确实指向本书内的 section。
+   * 手抄 / 篡改的坐标不该"点了没反应"——无效返回 false，由调用方报错。
+   * （书签 / 目录走的是 goToLocation，坐标可信，不改那条路。）
+   */
+  goToRelayCfi(cfi: string): boolean {
+    if (!this.book || !this.rendition) return false
+    try {
+      const section = (this.book as any).spine.get(cfi)
+      if (!section) return false
+      this.rendition.display(cfi)
+      return true
+    } catch {
+      return false
     }
   }
 

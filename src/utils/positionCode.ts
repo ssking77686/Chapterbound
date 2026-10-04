@@ -148,7 +148,10 @@ export function parseRelayInput(raw: string): RelayParseResult {
   for (const token of tokens) {
     const compact = normalize(token)
     if (compact.length < 8 || compact.length > 10) continue
-    if (!/\d/.test(compact)) continue
+    // 候选门用"原始 token 里有没有数字"：宽容映射（I/L→1、O→0）会把 ARTIFICIAL
+    // 这类 8~10 位纯英文单词也变成"含数字"的串，误报成版本不符。合法短码里版本位
+    // '1' 等原始数字总在；手抄把 '1' 写成 'I'，也还有其余数字兜底。
+    if (!/\d/.test(token)) continue
     const decoded = decodeRelayCode(token)
     if (decoded.ok) {
       result.shortcode = decoded.payload

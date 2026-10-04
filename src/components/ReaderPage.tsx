@@ -422,7 +422,12 @@ export function ReaderPage({ bookId, onBack }: Props) {
       return
     }
     const percent = engine.getCurrentPercent()
-    const label = await engine.getChapterLabelForSpine(engine.getCurrentSpineIndex())
+    let label: string | null = null
+    try {
+      label = await engine.getChapterLabelForSpine(engine.getCurrentSpineIndex())
+    } catch {
+      // 章节标签拿不到就回退"第 N 章"/留空，卡片照常生成
+    }
     const chapterNum = getCurrentChapter()
     const chapterText = label ?? (chapterNum > 0 ? `第 ${chapterNum} 章` : '')
     const excerpt = engine.getNearbyText(50)
@@ -468,13 +473,20 @@ export function ReaderPage({ bookId, onBack }: Props) {
     }
     // 坐标三选一：整卡里的 CFI 最精确（同一文件下逐字复现，跨设备同一点）；
     // 只有短码时用定位点序号（±约一段）；最后才是百分比。
+    // 三条路径都以"真的发起跳转"为准：失败就报错不关面板，不许报假成功。
     if (parsed.cfi) {
-      engine.goToLocation(parsed.cfi)
+      if (!engine.goToRelayCfi(parsed.cfi)) {
+        toast('这条 CFI 解析不了，检查一下卡片第 3 行', 'error', 4000)
+        return
+      }
       finish(`${engine.getProgressForLocation(parsed.cfi)}%`)
       return
     }
     if (parsed.shortcode) {
-      engine.goToLocationIndex(parsed.shortcode.locationIndex)
+      if (!engine.goToLocationIndex(parsed.shortcode.locationIndex)) {
+        toast('定位点还没就绪，稍等几秒再试', 'error')
+        return
+      }
       finish(`${(engine.getPercentForIndex(parsed.shortcode.locationIndex) * 100).toFixed(1)}%`)
       return
     }
@@ -483,7 +495,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
         toast('百分比超出范围', 'error')
         return
       }
-      engine.goToPercentage(parsed.percent / 100)
+      if (!engine.goToPercentage(parsed.percent / 100)) {
+        toast('定位点还没就绪，稍等几秒再试', 'error')
+        return
+      }
       finish(`${parsed.percent.toFixed(1)}%`)
       return
     }
