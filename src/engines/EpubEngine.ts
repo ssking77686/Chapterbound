@@ -8,35 +8,6 @@ import { detectTouch } from '../hooks/useIsTouch'
 
 type EventCallback = (...args: unknown[]) => void
 
-/** 深度优先找下一个节点（元素则下沉到首子节点），用于从 Range 起点向后收集文本 */
-function nextTextNode(node: Node): Node | null {
-  if (node.nodeType !== 3 && node.firstChild) return node.firstChild
-  let cur: Node | null = node
-  while (cur) {
-    if (cur.nextSibling) return cur.nextSibling
-    cur = cur.parentNode
-  }
-  return null
-}
-
-const BLOCK_TAGS = new Set([
-  'P', 'DIV', 'SECTION', 'ARTICLE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
-  'LI', 'BLOCKQUOTE', 'FIGURE', 'FIGCAPTION', 'TD', 'TH', 'TR', 'UL', 'OL', 'PRE', 'TABLE', 'BODY',
-])
-
-/** 向上找最近的块级容器（摘录跨块时补空格用；同一段落内的行内标签不算跨块） */
-function closestBlockElement(node: Node | null): Element | null {
-  let cur: Node | null = node
-  while (cur) {
-    if (cur.nodeType === 1) {
-      const tag = (cur as Element).tagName?.toUpperCase()
-      if (tag && BLOCK_TAGS.has(tag)) return cur as Element
-    }
-    cur = cur.parentNode
-  }
-  return null
-}
-
 export class EpubEngine implements IReaderEngine {
   readonly format = BookFormat.EPUB
   readonly name = 'EPUB Engine'
@@ -52,10 +23,6 @@ export class EpubEngine implements IReaderEngine {
   private anchorAfterResize: string | null = null
   /** 书文件字节（位置接力码的指纹材料），load 时记下 */
   private fileData: ArrayBuffer | null = null
-  /** 最近一次 relocated 的 spine index（位置卡片取章节标签用） */
-  private lastSpineIndex = -1
-  /** spine index → TOC 标签（位置卡片用，惰性构建、缓存） */
-  private chapterLabelCache: Map<number, string> | null = null
 
   async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
     this.containerEl = container
@@ -76,7 +43,6 @@ export class EpubEngine implements IReaderEngine {
       end: { cfi: string }
     }) => {
       const cfi = location.start.cfi
-      this.lastSpineIndex = location.start.index
       const progress = this.computeProgress(cfi)
       const page = location.start.displayed.page
       const total = location.start.displayed.total
@@ -145,8 +111,6 @@ export class EpubEngine implements IReaderEngine {
     this.touchStart = null
     this.anchorAfterResize = null
     this.fileData = null
-    this.lastSpineIndex = -1
-    this.chapterLabelCache = null
   }
 
   nextPage(): void {
@@ -286,7 +250,7 @@ export class EpubEngine implements IReaderEngine {
     if (cfi) this.anchorAfterResize = cfi
   }
 
-  // ── 位置接力（位置卡片 / 短码）：生成端与接收端共用 ──
+  // ── 位置接力（短码）：生成端与接收端共用 ──
 
   /** 书文件字节数（位置码指纹材料） */
   getFileSize(): number {
@@ -308,21 +272,6 @@ export class EpubEngine implements IReaderEngine {
     }
   }
 
-  /**
-   * 当前位置的百分比（0~1，精确比值）。
-   * 注意与 computeProgress 的区别：那个是"尽力而为"的整数进度，这个是位置接力用的。
-   */
-  getCurrentPercent(): number {
-    try {
-      const cfi = this.getCurrentLocation()
-      if (!cfi || !this.book || this.book.locations.length() === 0) return 0
-      const ratio = this.book.locations.percentageFromCfi(cfi)
-      return Number.isFinite(ratio) ? Math.min(1, Math.max(0, ratio)) : 0
-    } catch {
-      return 0
-    }
-  }
-
   /** 当前位置的定位点序号（位置码载荷），拿不到返回 -1 */
   getCurrentLocationIndex(): number {
     try {
@@ -333,11 +282,6 @@ export class EpubEngine implements IReaderEngine {
     } catch {
       return -1
     }
-  }
-
-  /** 最近一次 relocated 的 spine index（位置卡片的章节号回退用） */
-  getCurrentSpineIndex(): number {
-    return this.lastSpineIndex
   }
 
   /** 定位点序号的百分比（0~1，短码跳转后的落点提示用；与 percentageFromCfi 同一口径） */
@@ -410,39 +354,6 @@ export class EpubEngine implements IReaderEngine {
     }
   }
 
-  /** 位置卡片里的"附近原文摘录"：从当前 cfi 起点向后收集一小段正文（取不到就不放摘录行） */
-  getNearbyText(maxLen = 50): string {
-    try {
-      const cfi = this.getCurrentLocation()
-      if (!cfi || !this.rendition) return ''
-      const range = (this.rendition as unknown as {
-        getRange?: (c: string) => Range | undefined
-      }).getRange?.(cfi)
-      if (!range) return ''
-      let text = ''
-      let node: Node | null = range.startContainer
-      let offset = range.startOffset
-      let lastBlock: Element | null = null
-      while (node && text.length < maxLen) {
-        if (node.nodeType === 3) {
-          // 跨块补空格：标题/段落之间直接拼接会黏成"第一章 抵达夜幕低垂时"；
-          // 同一段落内的行内标签（em/strong…）块容器不变，不会误插空格。
-          const block = closestBlockElement(node.parentNode)
-          if (lastBlock && block && block !== lastBlock && text.length > 0 && !/\s$/.test(text)) {
-            text += ' '
-          }
-          if (block) lastBlock = block
-          text += (node.textContent ?? '').slice(offset)
-        }
-        offset = 0
-        node = nextTextNode(node)
-      }
-      return text.replace(/\s+/g, ' ').trim().slice(0, maxLen)
-    } catch {
-      return ''
-    }
-  }
-
   async getChapterMap(): Promise<Map<number, number>> {
     const map = new Map<number, number>()
     if (!this.book) return map
@@ -476,41 +387,6 @@ export class EpubEngine implements IReaderEngine {
 
     walk(toc)
     return map
-  }
-
-  /**
-   * 位置卡片用：spine index 处最近的一个 TOC 标签（含之前的锚点）。
-   * 单独一份缓存与 walk，**不动 getChapterMap**（图鉴解锁的编号语义零变化）。
-   */
-  async getChapterLabelForSpine(spineIndex: number): Promise<string | null> {
-    if (!this.book || spineIndex < 0) return null
-    if (!this.chapterLabelCache) {
-      const map = new Map<number, string>()
-      const toc = await this.getTOC()
-      const spine = (this.book as any).spine
-      const walk = (items: TOCItem[]) => {
-        for (const item of items) {
-          try {
-            const section = spine.get(item.href)
-            if (section) map.set(section.index, item.label)
-          } catch {
-            // 跳过无法解析的 TOC 条目
-          }
-          if (item.children?.length) walk(item.children)
-        }
-      }
-      walk(toc)
-      this.chapterLabelCache = map
-    }
-    let best = -1
-    let label: string | null = null
-    this.chapterLabelCache.forEach((l, i) => {
-      if (i <= spineIndex && i > best) {
-        best = i
-        label = l
-      }
-    })
-    return label
   }
 
   // ── private ──

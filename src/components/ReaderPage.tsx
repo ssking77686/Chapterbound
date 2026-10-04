@@ -63,9 +63,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [visibleCount, setVisibleCount] = useState(50)
   const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
   const [selResults, setSelResults] = useState<SearchResult[] | null>(null)
-  // 位置接力（设置面板内）：定位点就绪状态 / 生成的卡片 / 待解析的输入
+  // 位置接力（设置面板内）：定位点就绪状态 / 生成的短码 / 待解析的输入
   const [relayReady, setRelayReady] = useState(false)
-  const [relayCard, setRelayCard] = useState<{ text: string; code: string } | null>(null)
+  const [relayCode, setRelayCode] = useState<string | null>(null)
   const [relayInput, setRelayInput] = useState('')
 
   const [toc, setToc] = useState<TOCItem[]>([])
@@ -408,50 +408,28 @@ export function ReaderPage({ bookId, onBack }: Props) {
     }
   }, [])
 
-  const handleGenerateRelayCard = useCallback(async () => {
+  const handleGenerateRelayCode = useCallback(() => {
     const engine = getEngine()
     if (!engine) return
     if (!engine.isLocationsReady()) {
       useToastStore.getState().toast('定位点还在生成，稍等几秒再试', 'info')
       return
     }
-    const cfi = engine.getCurrentLocation()
     const index = engine.getCurrentLocationIndex()
-    if (!cfi || index < 0) {
+    if (index < 0) {
       useToastStore.getState().toast('拿不到当前位置', 'error')
       return
     }
-    const percent = engine.getCurrentPercent()
-    let label: string | null = null
-    try {
-      label = await engine.getChapterLabelForSpine(engine.getCurrentSpineIndex())
-    } catch {
-      // 章节标签拿不到就回退"第 N 章"/留空，卡片照常生成
-    }
-    const chapterNum = getCurrentChapter()
-    const chapterText = label ?? (chapterNum > 0 ? `第 ${chapterNum} 章` : '')
-    const excerpt = engine.getNearbyText(50)
     const fingerprint = makeFingerprint(engine.getFileSize(), engine.getFileHead())
-    const code = encodeRelayCode(fingerprint, index)
-    const head = [
-      `《${book?.title ?? '未命名'}》`,
-      book && book.author && book.author !== 'Unknown' ? book.author : '',
-      chapterText,
-      `${(percent * 100).toFixed(1)}%`,
-    ].filter(Boolean).join(' · ')
-    const lines = [head]
-    if (excerpt) lines.push(`「${excerpt}」`)
-    lines.push(cfi)
-    lines.push(code)
-    setRelayCard({ text: lines.join('\n'), code })
-  }, [getEngine, getCurrentChapter, book])
+    setRelayCode(encodeRelayCode(fingerprint, index))
+  }, [getEngine])
 
   const handleRelayJump = useCallback(() => {
     const engine = getEngine()
     if (!engine) return
     const toast = useToastStore.getState().toast
     const parsed = parseRelayInput(relayInput)
-    // 书名校验（整卡第一行的《书名》）：不匹配硬拒绝——位置语义跨书本来就不成立
+    // 书名校验（输入里带《书名》时）：不匹配硬拒绝——位置语义跨书本来就不成立
     if (parsed.title && book?.title && parsed.title !== book.title) {
       toast(`这码来自《${parsed.title}》，请先打开那本书`, 'error', 4000)
       return
@@ -471,8 +449,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         return
       }
     }
-    // 坐标三选一：整卡里的 CFI 最精确（同一文件下逐字复现，跨设备同一点）；
-    // 只有短码时用定位点序号（±约一段）；最后才是百分比。
+    // 坐标三选一：CFI（若输入里带了，逐字精确）＞ 短码序号（±约一段）＞ 百分比。
     // 三条路径都以"真的发起跳转"为准：失败就报错不关面板，不许报假成功。
     if (parsed.cfi) {
       if (!engine.goToRelayCfi(parsed.cfi)) {
@@ -1800,10 +1777,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       className="mb-3 text-xs leading-[1.7]"
                       style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}
                     >
-                      换设备阅读时：先在这里复制位置卡片，在另一台设备打开同一本书后，粘贴到下框里即可直达。
+                      换设备阅读时：先在这里生成并复制短码，在另一台设备打开同一本书后，粘贴到下框里即可直达。
                     </p>
 
-                    {/* 生成位置卡片 */}
+                    {/* 生成短码 */}
                     <motion.button
                       className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
                       style={{
@@ -1813,53 +1790,40 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       whileHover={relayReady ? { scale: 1.02 } : undefined}
                       whileTap={relayReady ? { scale: 0.98 } : undefined}
                       transition={springPress}
-                      onClick={handleGenerateRelayCard}
+                      onClick={handleGenerateRelayCode}
                     >
                       <Copy className="h-3.5 w-3.5" />
-                      {relayReady ? '生成位置卡片' : '定位点生成中…'}
+                      {relayReady ? '生成短码' : '定位点生成中…'}
                     </motion.button>
 
-                    {relayCard && (
+                    {relayCode && (
                       <div className="mt-3">
                         <div
-                          className="select-text whitespace-pre-wrap rounded-xl px-3 py-2.5 text-xs leading-[1.9]"
+                          className="select-text rounded-xl px-3 py-2.5 text-center text-sm tracking-[0.15em]"
                           style={{
                             background: 'var(--color-card)',
                             border: '1px solid var(--color-separator)',
                             color: 'var(--color-text)',
                             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                            wordBreak: 'break-all',
                           }}
                         >
-                          {relayCard.text}
+                          {relayCode}
                         </div>
-                        <div className="mt-2 flex gap-2">
-                          <motion.button
-                            className={`flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs ${isTouch ? 'min-h-11' : ''}`}
-                            style={{ color: 'var(--color-text)', border: '1px solid var(--color-separator)' }}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            transition={springPress}
-                            onClick={() => copyRelayText(relayCard.text, '位置卡片已复制')}
-                          >
-                            <Copy className="h-3 w-3" />
-                            复制卡片
-                          </motion.button>
-                          <motion.button
-                            className={`flex flex-1 items-center justify-center rounded-full px-3 py-1.5 text-xs ${isTouch ? 'min-h-11' : ''}`}
-                            style={{ color: 'var(--color-text)', border: '1px solid var(--color-separator)' }}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            transition={springPress}
-                            onClick={() => copyRelayText(relayCard.code, '短码已复制')}
-                          >
-                            只复制短码
-                          </motion.button>
-                        </div>
+                        <motion.button
+                          className={`mt-2 flex w-full items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs ${isTouch ? 'min-h-11' : ''}`}
+                          style={{ color: 'var(--color-text)', border: '1px solid var(--color-separator)' }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          transition={springPress}
+                          onClick={() => copyRelayText(relayCode, '短码已复制')}
+                        >
+                          <Copy className="h-3 w-3" />
+                          复制短码
+                        </motion.button>
                       </div>
                     )}
 
-                    {/* 输入位置码（整卡 / 短码 / 百分比都行） */}
+                    {/* 输入短码（百分比等也认） */}
                     <textarea
                       className={`mt-4 w-full resize-none rounded-lg px-3 py-2.5 text-sm outline-none ${isTouch ? 'min-h-11' : ''}`}
                       style={{
@@ -1868,7 +1832,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         border: '1px solid var(--color-separator)',
                       }}
                       rows={3}
-                      placeholder="粘贴位置卡片 / 短码 / 百分比…"
+                      placeholder="粘贴短码 / 百分比…"
                       value={relayInput}
                       onChange={(e) => setRelayInput(e.target.value)}
                     />
