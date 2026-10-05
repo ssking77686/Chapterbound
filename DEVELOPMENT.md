@@ -40,6 +40,8 @@ npm run desktop:build       # 打包 Windows 安装包（NSIS，最新产物自�
 
 > **国内网络打包注意**：`tauri build` 会从 GitHub Releases 下载 NSIS 工具链（tauri-bundler 2.9.4 需两个资产：`nsis-3.11.zip`（SHA1 `ef7ff767…bb10d`）与 `nsis_tauri_utils-v0.5.3` 的 dll（SHA1 `75197fee…9b860`））。GitHub 直连会 502。两种解法：① 设 `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR=https://gh-proxy.com/https://github.com`（值 = 代理前缀 + 完整 github 域名）重跑；② 最稳——手动经代理下载两个资产，把 zip 剥掉 `nsis-3.11/` 顶层解压到 `%LOCALAPPDATA%\tauri\NSIS`，dll 放入 `Plugins\x86-unicode\additional\`（bundler 校验必需文件齐全即跳过下载）。本机已预置，直接 `npm run desktop:build` 即可。
 
+> ⚠️ **已知坑：安装包缺 `WebView2Loader.dll`（2026-10-05 定位，修复待实施）**：windows-gnu 工具链构建的 exe 在导入表里**动态依赖 `WebView2Loader.dll`**（非系统 DLL；MSVC 链静态链接，上游对 GNU 路径覆盖薄）。tauri-bundler 的 NSIS 打包至今（CLI 2.11.4 实测）**不会把它打进安装包** → 安装出的目录只有 exe + uninstall.exe，双击报「找不到 WebView2Loader.dll」根本无法启动。开发时永远不暴露：tauri-build 会把 DLL 放在 `target/release/`（exe 旁），dev / 直接跑产物都正常，只有「安装后的 exe」缺它。**修复方案（下次打包一并实施）**：把 `WebView2Loader.dll`（来源：cargo 缓存 `webview2-com-sys/x64/`，或 `target/release/` 里的现成副本）放进 `src-tauri/`，并在 `tauri.conf.json` 的 `bundle` 加 `"resources": ["WebView2Loader.dll"]`——NSIS 会装到 exe 同目录；上游称 tauri-bundler 2.2.2 已修，但本机实测仍复现，故不依赖上游。当前 1.6.0 安装包受影响（临时兜底 = 手动拷 DLL 进安装目录）。详见 `docs/technical-audit.md` §4.1 / §6.5。
+
 > **Android 构建环境**（见下文「移动端适配」）：JDK 21 + Android SDK（platform 36、build-tools 34.0.0）。国内网络需配置 Maven/Gradle 镜像（`~/.gradle/init.gradle` + `android/gradle/wrapper/gradle-wrapper.properties`），`android/local.properties` 的 `sdk.dir` 必须用正斜杠（`sdk.dir=C:/android-sdk`，反斜杠会被 Java Properties 转义吞掉）。
 
 ## 目录结构

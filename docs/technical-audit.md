@@ -4,7 +4,7 @@
 >
 > **维护原则：** 记录模式而非行号（行号会过时），解释"为什么是问题"让未来维护者自行判断是否仍然适用。
 >
-> **最近更新：** 2026-10-05 — 位置接力（跨设备短码：新增 `src/utils/positionCode.ts` 模块、§5.2 跳转链、§5.3 场景导航、§1.1 补充跳转方法的 boolean 返回约定）；触屏沉浸模式与重排保位（§5.3 场景表）；§4.3 触屏命中区条目补设置面板欠账；§6.3 选区检索浮窗状态改为「搁置」。此前：2026-09-03 — 桌面分发切换为 Tauri v2 单一壳（Electron 移除：`electron/`、electron-builder、`release/` 产物停用，§5.1/§6.1/§6.5 更新）。更早：2026-08-31 — 移动端适配（Capacitor Android 分发），新增 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
+> **最近更新：** 2026-10-05 — 桌面 NSIS 安装包缺 `WebView2Loader.dll`（GNU 链动态依赖 + bundler 不打包；§4.1 新增风险行、§6.5 修复方案，待实施）；位置接力（跨设备短码：新增 `src/utils/positionCode.ts` 模块、§5.2 跳转链、§5.3 场景导航、§1.1 补充跳转方法的 boolean 返回约定）；触屏沉浸模式与重排保位（§5.3 场景表）；§4.3 触屏命中区条目补设置面板欠账；§6.3 选区检索浮窗状态改为「搁置」。此前：2026-09-03 — 桌面分发切换为 Tauri v2 单一壳（Electron 移除：`electron/`、electron-builder、`release/` 产物停用，§5.1/§6.1/§6.5 更新）。更早：2026-08-31 — 移动端适配（Capacitor Android 分发），新增 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
 
 ---
 
@@ -188,6 +188,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | localStorage 设置无类型校验 | 非法类型值流入 DOM | `settingsStore.load()` | 已修复 |
 | `settingsStore.save()` 无 try/catch | QuotaExceededError 穿透到事件处理器 | `settingsStore.save()` | 已修复 |
 | 图鉴列表无上限渲染 | 条目多时全部 DOM 节点 + 图片一次性渲染，stagger 动画 `delay: i * 0.04` 线性增长导致界面假死 | `ReaderPage.tsx` 图鉴面板 | 已修复：搜索防抖（>50条 150ms）、无限滚动（每批 50）、动画延迟上限 0.5s、图片懒加载、关联计数 useMemo |
+| 桌面安装包缺 `WebView2Loader.dll` | windows-gnu 构建的 exe 在导入表里**动态依赖**它（非系统 DLL；MSVC 链静态链接，上游对 GNU 路径覆盖薄），而 tauri-bundler 的 NSIS 打包（CLI 2.11.4 实测）不把它打进包 → 安装后双击报缺 DLL、应用完全打不开。开发时不可见：tauri-build 会把 DLL 放在 `target/release/` exe 旁 | `src-tauri/` 打包配置（`tauri.conf.json`） | **已定位（2026-10-05），修复方案已定、待实施**：DLL 入库 + `bundle.resources` 声明（见 §6.5）；当前 1.6.0 安装包受影响 |
 
 ### 4.2 数据完整性风险
 
@@ -395,6 +396,7 @@ ReaderPage 设置面板 onChange
 - 环境：JDK 21（`JAVA_HOME` 用 Windows 绝对路径）、SDK `C:/android-sdk`（`sdk.dir` 必须正斜杠）、国内 Maven/Gradle 镜像（`~/.gradle/init.gradle` + 腾讯云 distributionUrl）
 - **改完 Web 代码忘掉 `cap sync` 是最常见的"改了没用"原因**——APK 里是旧 web 产物
 - 桌面（Tauri v2）构建链独立：`npm run desktop:build`（内部 = `npm run build` → `tauri build`），NSIS 产物在 `src-tauri/target/release/bundle/nsis/`（`desktop:build` 结束后自动把最新安装包复制到根目录 `release/`），与 Android 互不影响。首次构建需联网拉 Rust crate + NSIS 打包器（此后有缓存）。**改完 Web 代码同样要等 beforeBuildCommand 重跑 `npm run build`**，装进安装包的是 `dist/` 产物
+- ⚠️ **GNU 链的 `WebView2Loader.dll` 陷阱（2026-10-05 定位，待修）**：详见 §4.1 风险行。原因：windows-gnu 工具链下 webview2-com-sys 只能动态链接 `WebView2Loader.dll`（MSVC 链静态链接所以无此问题）；tauri-bundler 的 NSIS 不打入该 DLL，**GNU 构建出的安装包从 1.5.0 起就一直是坏的**（装完只有 exe + uninstall.exe，双击报缺 DLL），只是开发时永远跑 dev / `target/release/` 产物（DLL 就在 exe 旁）而从未暴露。**修复方案（下次打包一并实施）**：把 DLL（来源：cargo 缓存 `webview2-com-sys/x64/WebView2Loader.dll`，或 `target/release/` 里的现成副本）放进 `src-tauri/` 并在 `tauri.conf.json` 的 `bundle` 加 `"resources": ["WebView2Loader.dll"]`——NSIS 会装到 exe 同目录；上游称 tauri-bundler 2.2.2 已修但本机 CLI 2.11.4 实测仍复现，故不依赖上游。**验证方式**：重打包后安装目录应有 3 个文件（exe / uninstall.exe / WebView2Loader.dll），双击即开。临时兜底 = 手动拷一份 DLL 进安装目录（现有 1.6.0 安装已如此处理并验证可用）
 - WebView2 数据目录由 identifier（`com.ereader.desktop`）决定，与 Electron 时代的书库（`%APPDATA%\Chapterbound`）不互通——有存量桌面用户需先做数据迁移方案
 
 ---
