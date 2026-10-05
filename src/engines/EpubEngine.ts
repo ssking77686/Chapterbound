@@ -21,9 +21,12 @@ export class EpubEngine implements IReaderEngine {
   private touchStart: { x: number; y: number; t: number } | null = null
   /** 重排后要钉回去的锚点（见 pinAfterResize） */
   private anchorAfterResize: string | null = null
+  /** 书文件字节（位置接力码的指纹材料），load 时记下 */
+  private fileData: ArrayBuffer | null = null
 
   async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
     this.containerEl = container
+    this.fileData = data
     this.book = Epub(data) as Book
 
     const rect = container.getBoundingClientRect()
@@ -107,6 +110,7 @@ export class EpubEngine implements IReaderEngine {
     this.gestureBoundContents.clear()
     this.touchStart = null
     this.anchorAfterResize = null
+    this.fileData = null
   }
 
   nextPage(): void {
@@ -244,6 +248,110 @@ export class EpubEngine implements IReaderEngine {
    */
   pinAfterResize(cfi: string): void {
     if (cfi) this.anchorAfterResize = cfi
+  }
+
+  // ── 位置接力（短码）：生成端与接收端共用 ──
+
+  /** 书文件字节数（位置码指纹材料） */
+  getFileSize(): number {
+    return this.fileData?.byteLength ?? 0
+  }
+
+  /** 书文件开头切片（位置码指纹材料；指纹只吃前 64KB） */
+  getFileHead(maxBytes = 65536): Uint8Array {
+    if (!this.fileData) return new Uint8Array(0)
+    return new Uint8Array(this.fileData, 0, Math.min(maxBytes, this.fileData.byteLength))
+  }
+
+  /** epub.js 定位点是否已生成（未生成时百分比 / 位置号都不可用） */
+  isLocationsReady(): boolean {
+    try {
+      return !!this.book && this.book.locations.length() > 0
+    } catch {
+      return false
+    }
+  }
+
+  /** 当前位置的定位点序号（位置码载荷），拿不到返回 -1 */
+  getCurrentLocationIndex(): number {
+    try {
+      const cfi = this.getCurrentLocation()
+      if (!cfi || !this.book || this.book.locations.length() === 0) return -1
+      const idx = this.book.locations.locationFromCfi(cfi)
+      return typeof idx === 'number' && Number.isFinite(idx) ? idx : -1
+    } catch {
+      return -1
+    }
+  }
+
+  /** 定位点序号的百分比（0~1，短码跳转后的落点提示用；与 percentageFromCfi 同一口径） */
+  getPercentForIndex(index: number): number {
+    try {
+      const n = this.book?.locations.length() ?? 0
+      if (n <= 1) return 0
+      return Math.min(1, Math.max(0, index / (n - 1)))
+    } catch {
+      return 0
+    }
+  }
+
+  /**
+   * 按百分比跳转（位置码的降级路径）。
+   * 返回"是否真的发起了跳转"：定位点未就绪等情况返回 false，由调用方报错——
+   * 位置接力里不许出现"面板关了、提示说已跳到，但其实什么都没发生"。
+   */
+  goToPercentage(p: number): boolean {
+    if (!this.book || !this.rendition || this.book.locations.length() === 0) return false
+    const clamped = Math.min(1, Math.max(0, p))
+    try {
+      const cfi = this.book.locations.cfiFromPercentage(clamped)
+      if (cfi && typeof cfi === 'string') {
+        this.rendition.display(cfi)
+        return true
+      }
+    } catch {
+      /* 定位点未就绪等情况 */
+    }
+    return false
+  }
+
+  /**
+   * 按定位点序号跳转（短码路径）。返回是否真的发起了跳转（语义同上）。
+   * 落点 = 该定位点起点 —— 定位点按书文本内容生成、与排版无关，
+   * 同一个书文件在两台设备上序号↔文本完全一致，所以短码跨设备才成立。
+   */
+  goToLocationIndex(index: number): boolean {
+    if (!this.book || !this.rendition) return false
+    const n = this.book.locations.length()
+    if (n <= 0) return false
+    const i = Math.min(n - 1, Math.max(0, Math.round(index)))
+    try {
+      const cfi = this.book.locations.cfiFromLocation(i)
+      if (cfi && typeof cfi === 'string') {
+        this.rendition.display(cfi)
+        return true
+      }
+    } catch {
+      /* 同上 */
+    }
+    return false
+  }
+
+  /**
+   * 位置接力专用：跳转前先验证 CFI 能解析、且确实指向本书内的 section。
+   * 手抄 / 篡改的坐标不该"点了没反应"——无效返回 false，由调用方报错。
+   * （书签 / 目录走的是 goToLocation，坐标可信，不改那条路。）
+   */
+  goToRelayCfi(cfi: string): boolean {
+    if (!this.book || !this.rendition) return false
+    try {
+      const section = (this.book as any).spine.get(cfi)
+      if (!section) return false
+      this.rendition.display(cfi)
+      return true
+    } catch {
+      return false
+    }
   }
 
   async getChapterMap(): Promise<Map<number, number>> {
