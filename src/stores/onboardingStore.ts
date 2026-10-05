@@ -22,7 +22,8 @@ interface OnboardingState {
   currentStep: number
   pendingNavigation: 'reader' | null
   start: () => void
-  advance: () => void
+  /** total = 当前生效步骤集的总步数（两套步骤集长度不同，由 Overlay 传 activeSteps.length） */
+  advance: (total: number) => void
   skip: () => void
   dismissForever: () => void
   clearNavigation: () => void
@@ -36,14 +37,15 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
   start: () => set({ isActive: true, currentStep: 0 }),
 
-  advance: () => {
+  advance: (total: number) => {
     const { currentStep } = get()
     const next = currentStep + 1
     // Step 4 (start-exploring) → Step 5 (page-turn): signal to navigate to reader
+    // （两套步骤集在索引 0–5 上恒同，见 onboardingSteps.ts 的不变量注释）
     if (next === 5) {
       set({ currentStep: next, pendingNavigation: 'reader' })
-    } else if (next >= 9) {
-      // All 9 steps done — just hide, don't persist
+    } else if (next >= total) {
+      // 走完当前这一套的全部步骤 — 只隐藏，不写入持久化
       set({ isActive: false })
     } else {
       set({ currentStep: next })
