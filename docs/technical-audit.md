@@ -4,7 +4,7 @@
 >
 > **维护原则：** 记录模式而非行号（行号会过时），解释"为什么是问题"让未来维护者自行判断是否仍然适用。
 >
-> **最近更新：** 2026-09-03 — 桌面分发切换为 Tauri v2 单一壳（Electron 移除：`electron/`、electron-builder、`release/` 产物停用，§5.1/§6.1/§6.5 更新）。此前：2026-08-31 — 移动端适配（Capacitor Android 分发），新增 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
+> **最近更新：** 2026-10-05 — 位置接力（跨设备短码：新增 `src/utils/positionCode.ts` 模块、§5.2 跳转链、§5.3 场景导航、§1.1 补充跳转方法的 boolean 返回约定）；触屏沉浸模式与重排保位（§5.3 场景表）；§4.3 触屏命中区条目补设置面板欠账；§6.3 选区检索浮窗状态改为「搁置」。此前：2026-09-03 — 桌面分发切换为 Tauri v2 单一壳（Electron 移除：`electron/`、electron-builder、`release/` 产物停用，§5.1/§6.1/§6.5 更新）。更早：2026-08-31 — 移动端适配（Capacitor Android 分发），新增 Android 平台注意事项；§3.1 补充 v1.3.2 以来新增的错误反馈入口（Toast/ErrorBoundary/unhandledrejection）。
 
 ---
 
@@ -24,6 +24,8 @@
 | Store 加载 | 默认值 | settings → `defaults`，onboarding dismissed → `false` |
 
 **设计意图：** 电子书阅读器的核心路径（翻页、渲染）不应因辅助功能（封面提取、TOC 映射、进度保存）的失败而中断。
+
+**例外（位置接力，2026-10）：** 三个跳转方法 `goToRelayCfi` / `goToLocationIndex` / `goToPercentage` 返回 `boolean`，不走静默降级——它们失败时"什么都没发生"，而调用方已经在往下走（关面板、报成功），会**报假成功**。审查修正定下的约定：**返回"是否真的发起了跳转"，失败由调用方报错且不关面板**。
 
 ### 1.2 try/catch 分布
 
@@ -209,7 +211,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `EpubEngine` 调试日志残留 | 每次翻页打印 console.log | `EpubEngine.ts` | 已修复：已注释 |
 | 取色气泡的遮罩只有 header 那么大 | `backdrop-filter` 为 `fixed` 后代重建包含块 → 遮罩的 `inset-0` 解析成 header 尺寸（412×88），**点书页正文关不掉气泡**：交互静默失效，不报错 | `ReaderPage.tsx` | **未修**，登记在检查台的 `KNOWN_DEFECTS`（含根因与修法） |
 | `下一页` 是 24×811 的隐形热区 | 盖住气泡关闭按钮的右半边 → **点关闭按钮正中/右半边会翻页**：点到了别的东西，同样不报错 | `ReaderPage.tsx` | **未修**（检查台 I2 独立命中，`elementFromPoint` 复核过） |
-| 触屏命中区未铺满 | 气泡色块/关闭 32×32、书架顶栏 40×40、书卡封面按钮 30×30（均 < 44）；`删除` 按钮无可访问名称 | `ReaderPage.tsx`, `LibraryPage.tsx` | **未修**（检查台 I3 在触屏档下报出） |
+| 触屏命中区未铺满 | 气泡色块/关闭 32×32、书架顶栏 40×40、书卡封面按钮 30×30（均 < 44）；`删除` 按钮无可访问名称。2026-10-05 复查补充：**设置面板**同样有存量欠账——字体下拉 41px、行间距按钮 37px、页面宽度按钮 36px、单页模式/进度条开关 28px | `ReaderPage.tsx`, `LibraryPage.tsx` | **未修**（检查台 I3 在触屏档下报出） |
 
 ---
 
@@ -226,6 +228,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/core/interfaces/` | 4 个抽象接口：`IReaderEngine`、`IBookParser`、`IStorageAdapter`、`IPlugin` | 接口定义 |
 | `src/adapters/IndexedDBAdapter.ts` | Dexie.js 封装，实现 `IStorageAdapter` | `IndexedDBAdapter` |
 | `src/engines/EpubEngine.ts` | epub.js Book + Rendition 封装，实现 `IReaderEngine` | `EpubEngine` |
+| `src/utils/positionCode.ts` | 位置接力短码：Crockford Base32 编解码（版本位 + 文件字节指纹 + 定位点序号 + 校验位）、输入解析（CFI ＞ 短码 ＞ 百分比）。纯函数、无 UI 依赖；**三端设备跑的是同一份代码，这就是短码能跨设备互认的全部机制**（没有查表/服务端） | `encodeRelayCode`, `decodeRelayCode`, `makeFingerprint`, `parseRelayInput` |
 | `src/parsers/EpubParser.ts` | EPUB 元数据/封面提取，实现 `IBookParser` | `EpubParser` |
 | `src/plugins/default-plugins.ts` | 启动时注册所有适配器/引擎/解析器到 registry | `initializeApp` |
 | `src/features/` | 功能插件骨架（空壳，生命周期钩子已注册、无 UI） | `BookshelfPlugin` 等 |
@@ -244,7 +247,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/engines/EpubEngine.ts`（手势部分） | 触屏手势：`gesture:swipe` / `gesture:tap` 事件（仅触屏注册，桌面零注册） | `EpubEngine` 事件订阅 |
 | `src/index.css`（移动端段） | 四个安全区变量、触屏保底（16px，注入失败时）、`.hover-reveal` / `.icon-btn` / `.reader-touch` 工具类；触屏规则全部挂在 `[data-touch='1']` 上，**不写 `@media (hover: none)`** | CSS 变量与类 |
 | `src/components/LibraryPage.tsx` | 书架页面：书籍列表、导入/删除/封面操作 | `LibraryPage` |
-| `src/components/ReaderPage.tsx` | 阅读器页面：渲染区 + 设置/书签/高亮/图鉴/目录侧边栏 | `ReaderPage` |
+| `src/components/ReaderPage.tsx` | 阅读器页面：渲染区 + 设置/书签/高亮/图鉴/目录侧边栏；设置面板底部含**位置接力**（生成短码 / 输入跳转）；触屏含**沉浸模式**（点正文中间切换顶栏与页码） | `ReaderPage` |
 | `src/components/OnboardingOverlay.tsx` | 引导覆盖层：9 步引导、高亮定位、跳过/永久关闭 | `OnboardingOverlay` |
 | `src/components/AboutOverlay.tsx` | 关于页面：项目信息、贡献者 | `AboutOverlay` |
 | `src/components/ErrorBoundary.tsx` | React 错误边界：捕获渲染期异常，显示友好恢复页面 | `ErrorBoundary` |
@@ -295,6 +298,16 @@ ReaderPage 设置面板 onChange
     → save(next) → localStorage.setItem('ereader-settings', JSON.stringify(next))
 ```
 
+**位置接力跳转（设置面板）：**
+```
+用户粘贴位置码 → 「跳转」
+  → parseRelayInput(text)               // utils/positionCode：短码/CFI/百分比优先级解析
+  → 若带短码：指纹闸 —— makeFingerprint(engine 文件字节) 与短码载荷比对，不符硬拒绝
+  → EpubEngine.goToRelayCfi / goToLocationIndex / goToPercentage
+      // 三个方法返回 boolean：失败报错且不关面板，成功才关面板 + toast 落点
+  → relocated → progressStore.saveProgress（与普通跳转同一条路径）
+```
+
 **错误反馈流程：**
 ```
 组件 catch 异常
@@ -317,7 +330,10 @@ ReaderPage 设置面板 onChange
 | 修改 EPUB 元数据提取 | `EpubParser.ts`、`bookshelfStore.ts`（importBook 中使用解析结果的逻辑） |
 | 修改数据导入导出逻辑 | `compendiumStore.ts`、`IndexedDBAdapter.ts`（importCompendium）、`ReaderPage.tsx`（导入 UI） |
 | 改移动端安全区/状态栏适配 | `MainActivity.java`（四个注入值）、`index.css`（四个变量 + 触屏保底）、`ReaderPage.tsx` / `LibraryPage.tsx` / `AboutOverlay.tsx`（应用点 padding） |
-| 改触屏手势（滑动/tap 翻页） | `EpubEngine.ts`（手势判定阈值）、`ReaderPage.tsx`（订阅与执行）、`useIsTouch.ts`（检测源） |
+| 改触屏手势（滑动/tap 翻页、沉浸模式） | `EpubEngine.ts`（手势判定阈值）、`ReaderPage.tsx`（订阅与执行；沉浸模式 = 中间 tap 切换，`chromeHidden = isTouch && !toolbarVisible`，隐藏用 `display:none` 一次做到"出布局 + 不可点"，且**不能加高度动画**——每帧高度变化都会触发 engine.resize 重排）、`useIsTouch.ts`（检测源） |
+| 改/查位置接力（短码） | `src/utils/positionCode.ts`（编解码与校验；**改格式 = 断跨设备兼容，先读文件头**）、`EpubEngine.ts`（定位点/指纹接口，跳转方法必须返回 boolean）、`ReaderPage.tsx`（设置面板 UI 与解析优先级接线） |
+| 改视口 / 重排相关（沉浸模式、转屏、分屏、软键盘） | `EpubEngine.resize()` / `pinAfterResize()`、`useReader.ts` 的 ResizeObserver。⚠️ resize 必须带当前位置 cfi 且配套 `pinAfterResize`——epub.js 内部的重定位实测落不到锚点；锚点在重排期间锁定 1.5s（否则钉回的页首会被当成新锚点、逐次累积漂移），尺寸变化去抖 180ms |
+| 给正文加视觉标注（词条标记 / 下划线 / 批注） | ⚠️ **不要在正文 content document 里插 DOM 节点**——epub.js 计算 CFI 的两条自动路径（`mapping.js`、`Section.cfiFromRange`）**不传 `ignoreClass`**，插入节点会让已保存的进度/书签/高亮全部错位。要标注用 `rendition.annotations`（SVG 覆盖层，marks-pane）。其几何是**附加时快照**：分页未落定时批量添加会全部错位（2026-10 正文词条标记方案实测否决的根因） |
 | 改移动端侧栏/工具栏布局 | `ReaderPage.tsx` + `index.css`（`.icon-btn` 44px 命中区；**新加可点元素记得带 `cursor-pointer`**，否则检查台看不见它） |
 | 改 Android 构建/图标/主题 | `android/app/src/main/res/`（样式与图标）、`capacitor.config.ts`、`MainActivity.java` |
 | 改/查 UI 几何问题（越界、点不到、命中区太小） | `ui-console.html` + `console/`（判据在 `console/audit.ts`，先读文件头）；改完在检查台里跑一遍 |
@@ -362,7 +378,7 @@ ReaderPage 设置面板 onChange
 | 无 release 签名 | 当前分发的是 debug APK，签名是 debug key | 待办（Phase 3+） |
 | intent-filter 未接 | 无法"用 Chapterbound 打开 .epub"；导入走系统文件选择器（SAF 回退） | 待办（Phase 3+） |
 | `@capacitor/app` backButton 未接 | 返回键靠 popstate 方案（见 6.4），原生的 backButton 事件未接入 | 待办（Phase 3+） |
-| 选区检索浮窗（`selData` 定位） | Android 原生选区菜单与 Web 浮窗并存，坐标/交互不可靠 | 已知：仅保证不崩溃，重设计待 Phase 4 真机专项 |
+| 选区检索浮窗（`selData` 定位） | Android 原生选区菜单与 Web 浮窗并存，坐标/交互不可靠 | **搁置（2026-10）**：重设计尝试（正文词条标记）经实测否决并回滚——marks-pane 几何快照时机 + 正文 DOM 不可插元素（见 §5.3 标注行）；现状仅保证不崩溃 |
 | spread 'auto' 双页展开 | 窄屏下 epub.js 实际退化为单页，但未在真机验证 | 待 Phase 4 真机验证后决定是否默认 'single' |
 | `crypto.randomUUID` | 需 Chrome 92+（Android 11+ 默认满足）；更旧设备报错 | 待 Phase 3 验证，必要时 polyfill |
 | 旧版本 Android WebView 碎片化 | 不同厂商 WebView 版本差异大，CSS 新特性可能缺失 | 待真机验证 |
