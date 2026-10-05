@@ -54,6 +54,7 @@ src/
 ├── stores/         # Zustand store（8 个独立 store）
 ├── hooks/          # React hooks（useReader, useKeyboard, useTheme, useIsTouch）
 ├── components/     # UI 组件（LibraryPage, ReaderPage, OnboardingOverlay, AboutOverlay, ErrorBoundary, ToastContainer）
+├── utils/          # 纯函数工具（positionCode：位置接力短码编解码 / 字节指纹 / 输入解析）
 └── plugins/        # 应用启动注册（default-plugins）
 
 src-tauri/          # Tauri v2 桌面壳（Rust 入口 + tauri.conf.json 配置）
@@ -115,6 +116,10 @@ motion/react 提供，三套 spring 配置：
 
 **翻页手势（引擎级）** — `EpubEngine` 在 iframe 的 `contents` 上绑定 touch 事件（epub.js 会把 iframe 内 DOM 事件转发出来），发出 `gesture:swipe`（|dx|≥60px、|dx|>2|dy|、≤600ms）和 `gesture:tap`（≤350ms、≤10px 位移）事件；长按选词（selection 非空）时抑制翻页。桌面端不注册手势，零影响。
 
+**沉浸模式（仅触屏）** — 点正文中间切换顶栏与页码显隐（左右 30% 仍翻页）。隐藏用 `display:none` 而不是「透明 + `pointer-events:none`」：一次同时做到从布局移除（高度还给正文）与不可点击，分成两个属性写迟早会漏一个。刻意**不做高度动画** —— 高度每变一帧都会触发一次 `engine.resize()` → epub.js 重排一次。`chromeHidden = isTouch && !toolbarVisible`，桌面恒为 false（桌面顶栏仍走 3 秒无操作渐隐到 0.3，行为不变）。
+
+**重排保住阅读位置** — 正文区尺寸变化（转屏 / 分屏 / 软键盘弹出 / 沉浸切换）会让 epub.js 重新分页，"第 N 页"对应的文字已经变了。`EpubEngine.resize(w, h, cfi)` 必须带上当前位置的 cfi，并配套 `pinAfterResize(cfi)` 在重排落定后显式跳回；`useReader` 的 ResizeObserver 负责维护锚点（**重排期间锁定 1.5s 不刷新**，否则钉回后的页首会被当成新锚点、逐次累积漂移）并对尺寸变化去抖 180ms。为什么光带 cfi 还不够：epub.js 内部的重定位实测落不到锚点（详见 `docs/technical-audit.md` §5.3 与提交「重排后保住阅读位置」）。
+
 **安全区注入（原生桥接）** — Android WebView 的 `env(safe-area-inset-*)` 恒为 0。`android/app/src/main/java/com/chapterbound/app/MainActivity.java` 的 `injectSafeArea()` 启动时读取 `statusBars()` / `navigationBars()` / `displayCutout()`，**四个值一起**注入为 CSS 变量 `--safe-top`/`--safe-bottom`/`--safe-left`/`--safe-right`（页面未就绪自动重试），工具栏/侧栏/书页区/图鉴详情据此避开状态栏、刘海与手势条。三个易错点：**(1) 必须除以 `density`** —— `WindowInsetsCompat.getInsets()` 返回物理像素，而 WebView 里 1 CSS px = 1 dp，漏掉这步 `--safe-top` 会被放大 density 倍（2.0~3.5，历史 bug：顶栏被压低几十像素）；**(2) 四个值必须与标记同步写入** —— `data-safe-top-injected` 的语义是「四个值都已注入」，只写 top 却带标记会让 CSS 保底连带失效（历史 bug：`--safe-bottom` 掉回 0，页码胶囊压在手势条下）；**(3) 顶部仍只取 `statusBars()`，不要对 `displayCutout()` 取 max** —— 竖屏刘海已含在状态栏高度内，取大会下移过头（历史 bug）。左/右只在横屏刘海机（手机横屏）非 0。旋转/折叠/分屏**不重建 Activity**（manifest 声明了 `configChanges`），所以 `onConfigurationChanged()` 里会重新注入。CSS 侧保底规则是 `:root[data-touch='1']:not([data-safe-top-injected])`，16px，仅在注入失败时生效；桌面四个值恒为 0，零回归。
 
 **edge-to-edge** — Android 15/16 对 targetSdk 35+ 强制 edge-to-edge，会让 WebView 内容铺到状态栏后面。`android/app/src/main/res/values-v35/styles.xml` 里写了 `windowOptOutEdgeToEdgeEnforcement` 想豁免，状态栏颜色与 Web 主题色对齐（`values-night-v35` 深色变体）。
@@ -148,9 +153,9 @@ motion/react 提供，三套 spring 配置：
 - **功能插件是骨架**：`src/features/` 下的 4 个插件注册了生命周期钩子但没有 UI 扩展。插件系统已接线但未使用。
 - **仅支持 EPUB**：尚无 PDF 或 TXT 引擎，`registry.getEngine()` 对非 EPUB 格式返回 `undefined`。导入已收敛为仅 `.epub`（含校验，拒绝其他格式并 toast 提示）。
 - **Android WebView 持久化**：IndexedDB 数据存于 WebView 应用数据目录，卸载/清数据会丢失（本阶段未做备份导出）。
-- **Android 待办（Phase 3+）**：intent-filter 导入（SAF 当前为系统文件选择器回退）、`@capacitor/app` 返回键接入、release 签名、真机选区检索重设计、移动端图鉴工作流（已决策砍掉）。
+- **Android 待办（Phase 3+）**：intent-filter 导入（SAF 当前为系统文件选择器回退）、`@capacitor/app` 返回键接入、release 签名。真机选区检索重设计：**2026-10 决策搁置**——正文词条标记方案经实测否决并回滚（marks-pane 几何快照时机 + 正文 DOM 不可插元素两条硬约束，见 `docs/technical-audit.md` §5.3/§6.3）。移动端图鉴工作流（已决策砍掉）。
 - **阅读器取色气泡的遮罩只有 header 那么大**（未修，已登记在检查台的「已知缺陷」区）：`ReaderPage.tsx` 的遮罩写了 `fixed inset-0`，但它在带 `backdrop-filter` 的 header 里面 —— `backdrop-filter` 会为后代的 `fixed` 元素**重建包含块**（和 `transform`/`filter` 一样），于是 `inset-0` 解析成 header 的尺寸（实测 412×88），而不是视口。后果：**点书页正文关不掉气泡**，只能靠右上角 X 或点工具栏。修法是把 `backdrop-filter` 从 header 挪到一个内层背景 div（`absolute inset-0 -z-10 pointer-events-none`），header 自身保留半透明底色，层级关系不用动。
-- **触屏命中区没铺满**（检查台查出，未修）：书签气泡的 5 个色块与关闭按钮都是 32×32、书架顶栏的「切换主题」「关于」是 40×40、「导入书籍」高 40、书卡上的封面按钮 30×30 —— 都低于 44px。其中「删除」按钮还**没有可访问名称**（无 `aria-label`）。注意色块那组有真实张力：5×44 + 44 = 264px，放进 270px 的气泡会顶到边。
+- **触屏命中区没铺满**（检查台查出，未修）：书签气泡的 5 个色块与关闭按钮都是 32×32、书架顶栏的「切换主题」「关于」是 40×40、「导入书籍」高 40、书卡上的封面按钮 30×30 —— 都低于 44px。其中「删除」按钮还**没有可访问名称**（无 `aria-label`）。注意色块那组有真实张力：5×44 + 44 = 264px，放进 270px 的气泡会顶到边。2026-10 复查补充：**设置面板**同样有存量欠账 —— 字体下拉 41px、行间距按钮 37px、页面宽度按钮 36px、单页模式 / 进度条开关 28px。
 - **`下一页` 是一条 24×811 的隐形热区**（未修）：`absolute right-2` 且贯穿全高，盖住了气泡关闭按钮的右半边 —— 点关闭按钮正中或右半边会**翻页**。修法不是加 z-index，而是那条热区不该贯穿全高、也不该压住贴右缘的浮层。
 - **相关文档**：`docs/technical-audit.md` — 代码健康档案：错误处理惯例、数据持久化细节、风险清单、模块导航索引。
 
@@ -161,3 +166,5 @@ motion/react 提供，三套 spring 配置：
 **epub.js 引擎生命周期**：`EpubEngine.load()` 创建 Book 和 Rendition，渲染到传入的容器，触发 `'ready'` 事件。在 `'relocated'` 时触发 `locationChange`（含 cfi、progress、page、total）。清理时务必调用 `destroy()`——它会销毁 rendition 和 book。
 
 **章节检测**：`getChapterMap()` 通过递归遍历 TOC 树，将 TOC 项的 `href` 映射到 epub.js spine index，生成 `章节号 → spine索引` 的双向映射。这个映射被图鉴系统用于自动检测当前章节。
+
+**位置接力（跨设备手动搬运阅读位置）**：阅读器设置面板底部。生成侧只产一行**短码**（`src/utils/positionCode.ts`：Crockford Base32，版本位 + 文件字节指纹 + 定位点序号 + 校验位）；输入侧按 CFI ＞ 短码 ＞ 百分比解析，短码只做"书身份闸"（指纹校验），不同文件 / 不同版本一律硬拒绝，不静默跳错位置。跨设备成立的两个前提：epub.js 定位点按书**文本内容**生成（与排版无关，同一文件两端"序号 ↔ 文本"完全一致）；编解码两端跑的是同一份代码（三端由同一 web 代码构建，不存在查表或服务端）。

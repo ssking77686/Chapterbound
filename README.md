@@ -68,7 +68,7 @@
 | Windows 桌面 | Tauri v2（`npm run desktop:build`，产出 NSIS 安装包） |
 | Android 手机 | Capacitor 封装，一键打包 APK，侧载分发（见下方命令） |
 
-同一份代码两种壳分发，行为一致。Android 端额外获得：**滑动 / 轻点翻页**、状态栏安全区适配（工具栏自动避开刘海/防误触区）、44px 触屏命中区、返回键逐层退出。
+同一份代码两种壳分发，行为一致。Android 端额外获得：**滑动 / 轻点翻页**、**点正文中间切换沉浸模式**（隐去顶栏与页码，换回一到两行正文）、状态栏安全区适配（工具栏自动避开刘海/防误触区）、44px 触屏命中区、返回键逐层退出。
 
 ## 快速开始
 
@@ -79,8 +79,8 @@ npm run build    # 生产构建
 npm run lint     # 代码检查
 
 # Android APK（需 JDK 21 + Android SDK，详见开发者文档）
-npx cap sync android
-cd android && ./gradlew assembleDebug   # 产物：android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:build   # 内含 build + cap sync + assembleDebug，产物自动拷到 release/
+# 不要裸跑 gradlew assembleDebug —— 它不重新构建 web 产物，会把旧的打进去
 ```
 
 ---
@@ -97,6 +97,12 @@ cd android && ./gradlew assembleDebug   # 产物：android/app/build/outputs/apk
 ---
 
 ## 更新日志
+
+**未发布** (2026-10)
+- 沉浸模式（仅触屏）：点正文中间隐去顶栏与页码，换回一到两行正文；再点一下恢复。左右两侧仍翻页
+- 修复重排后阅读位置漂移：转屏 / 分屏 / 软键盘弹出 / 沉浸切换都不再跳页（此前可能连退数页甚至退回章首）
+- 顶栏下移 8px：避开系统防误触 / 下拉通知区，修复"顶栏点不动"
+- 位置接力：把当前阅读位置生成一个可搬运的短码，在另一台设备打开同一本书后粘贴或输入即可直达——跨设备手动接力阅读位置，无需云同步
 
 **v1.5.0** (2026-09)
 - 桌面端迁移 Tauri v2：Electron 移除，NSIS 安装包（`npm run desktop:build`，约 4.5 MB），Windows 原生 WebView2 渲染
@@ -157,4 +163,4 @@ cd android && ./gradlew assembleDebug   # 产物：android/app/build/outputs/apk
 
 ## 许可
 
-[MIT](LICENSE) © ahine Yang
+[MIT](LICENSE) © ahine Yang 

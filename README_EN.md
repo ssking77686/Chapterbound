@@ -68,7 +68,7 @@ The project's standout feature. As you read, characters, locations, and monsters
 | Windows desktop | Tauri v2 (`npm run desktop:build`, produces an NSIS installer) |
 | Android phone | Capacitor wrapper, one-command APK build, sideload to distribute |
 
-One codebase, two shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
+One codebase, two shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, **immersive mode via a tap in the middle of the text** (hides the toolbar and page number, giving one to two lines of text back), status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
 
 ## Quick Start
 
@@ -79,8 +79,8 @@ npm run build    # production build
 npm run lint     # lint
 
 # Android APK (requires JDK 21 + Android SDK, see Developer Docs)
-npx cap sync android
-cd android && ./gradlew assembleDebug   # output: android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:build   # runs build + cap sync + assembleDebug; APK is copied to release/
+# don't run gradlew assembleDebug directly — it does not rebuild the web assets and ships stale ones
 ```
 
 ---
@@ -97,6 +97,12 @@ cd android && ./gradlew assembleDebug   # output: android/app/build/outputs/apk/
 ---
 
 ## Changelog
+
+**Unreleased** (2026-10)
+- Immersive mode (touch only): tap the middle of the text to hide the toolbar and page number, giving one to two lines back; tap again to restore. The left/right thirds still turn pages
+- Fixed the reading position drifting after a reflow: rotating, split-screen, the soft keyboard appearing, and toggling immersive mode no longer jump pages (it could previously jump several pages back, or to the start of the chapter)
+- Toolbar moved down 8px: clears the system anti-accidental-touch / notification-shade zone that made the toolbar untappable
+- Position relay: generate a portable short code for your current spot; paste or type it into the same book on another device to jump straight there — manual cross-device position hand-off, no cloud sync needed
 
 **v1.5.0** (2026-09)
 - Desktop migrated to Tauri v2: Electron removed; NSIS installer (`npm run desktop:build`, ~4.5 MB) rendered by the native Windows WebView2
