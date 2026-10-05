@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react'
-import { X, ExternalLink, Heart, Package, Code2 } from 'lucide-react'
+import { X, ExternalLink, Heart, Code2 } from 'lucide-react'
 import { projectInfo, type Contributor } from '../data/project-info'
 
 interface Props {
@@ -121,15 +121,12 @@ export function AboutOverlay({ open, onClose }: Props) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ ...springDefault, delay: 0.05 }}
               >
-                <div
-                  className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl"
-                  style={{
-                    background: 'var(--color-accent)',
-                    boxShadow: '0 4px 16px rgba(184, 124, 75, 0.3)',
-                  }}
-                >
-                  <Package className="h-9 w-9 text-white" />
-                </div>
+                <img
+                  src="./app-icon.png"
+                  alt={projectInfo.name}
+                  className="mx-auto mb-4 block h-20 w-20"
+                  style={{ borderRadius: 18, boxShadow: '0 4px 16px rgba(184, 124, 75, 0.3)' }}
+                />
                 <h1
                   className="mb-1 text-2xl font-bold tracking-[-0.015em]"
                   style={{ color: 'var(--color-text)', lineHeight: 1.15 }}

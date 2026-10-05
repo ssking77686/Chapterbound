@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { ScrollText, User, MapPin, BookOpen, ArrowLeft, List, Settings } from 'lucide-react'
+import { ScrollText, User, MapPin, ArrowLeft, List, Settings } from 'lucide-react'
 import { useOnboardingStore } from '../stores/onboardingStore'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { getOnboardingSteps } from '../data/onboardingSteps'
@@ -308,16 +308,14 @@ export function OnboardingOverlay() {
       >
         {isWelcome ? (
           <>
-            <motion.div
-              className="flex h-20 w-20 items-center justify-center rounded-2xl mb-1"
-              style={{
-                background: 'rgba(184,124,75,0.1)',
-              }}
+            <motion.img
+              src="./app-icon.png"
+              alt="Chapterbound"
+              className="mb-1 h-20 w-20"
+              style={{ borderRadius: 18 }}
               animate={{ boxShadow: ['0 0 16px rgba(184,124,75,0.1)', '0 0 40px rgba(184,124,75,0.28)', '0 0 16px rgba(184,124,75,0.1)'] }}
               transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <BookOpen className="h-9 w-9" style={{ color: 'var(--color-accent)' }} />
-            </motion.div>
+            />
             <p
               className="font-medium tracking-widest"
               style={{ color: 'var(--color-text-secondary)', fontSize: '0.6875rem', textTransform: 'uppercase' }}
