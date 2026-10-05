@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useBookshelfStore } from '../stores/bookshelfStore'
+import { useToastStore } from '../stores/toastStore'
 import { BookOpen, Trash2, Plus, Sun, Moon, ImageIcon, Undo2, Info } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { AboutOverlay } from './AboutOverlay'
@@ -56,15 +57,30 @@ export function LibraryPage({ onOpenBook }: Props) {
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    await importBook(file)
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (ext !== 'epub') {
+      useToastStore.getState().toast('仅支持 EPUB 格式', 'error')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+    try {
+      await importBook(file)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '导入失败'
+      useToastStore.getState().toast(msg, 'error')
+    }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleRemove = (id: string) => {
     setRemovingIds((prev) => new Set(prev).add(id))
     pendingRemovals.current.add(id)
-    setTimeout(() => {
-      removeBook(id)
+    setTimeout(async () => {
+      try {
+        await removeBook(id)
+      } catch {
+        useToastStore.getState().toast('删除失败', 'error')
+      }
       setRemovingIds((prev) => {
         const next = new Set(prev)
         next.delete(id)
@@ -95,6 +111,11 @@ export function LibraryPage({ onOpenBook }: Props) {
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
           boxShadow: scrolled ? '0 1px 0 0 var(--color-separator)' : 'none',
+          // 净空 = 状态栏高度 + 8px。那 8px 是给安卓顶部防误触/下拉通知区的：
+          // 它通常比状态栏本身更高，贴边那一横带点不动（历史 bug 清单里的「顶栏无法点击」）。
+          paddingTop: 'calc(1.25rem + var(--safe-top))',
+          paddingLeft: 'calc(1rem + var(--safe-left))',
+          paddingRight: 'calc(1rem + var(--safe-right))',
         }}
       >
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-2">
@@ -141,7 +162,7 @@ export function LibraryPage({ onOpenBook }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".epub,.pdf,.txt"
+              accept=".epub"
               onChange={handleImport}
               className="hidden"
             />
@@ -157,7 +178,13 @@ export function LibraryPage({ onOpenBook }: Props) {
         </div>
       </motion.header>
 
-      <main className="mx-auto max-w-[1800px] px-4 pt-6 pb-12">
+      <main
+        className="mx-auto max-w-[1800px] px-4 pt-6 pb-12"
+        style={{
+          paddingLeft: 'calc(1rem + var(--safe-left))',
+          paddingRight: 'calc(1rem + var(--safe-right))',
+        }}
+      >
         {loading ? (
           <div className="mt-20 text-center" style={{ color: 'var(--color-text-secondary)' }}>
             加载中...
@@ -237,7 +264,7 @@ export function LibraryPage({ onOpenBook }: Props) {
                             />
                           </div>
                         )}
-                        <div className="absolute right-1.5 bottom-1.5 hidden gap-1 group-hover:flex">
+                        <div className="hover-reveal absolute right-1.5 bottom-1.5 gap-1">
                           <motion.button
                             className="rounded-full p-2"
                             style={{
@@ -297,7 +324,7 @@ export function LibraryPage({ onOpenBook }: Props) {
                     </motion.div>
                     {/* 删除按钮 */}
                     <motion.button
-                      className="absolute right-3 top-3 hidden rounded-full p-2 group-hover:flex items-center justify-center"
+                      className="hover-reveal absolute right-3 top-3 items-center justify-center rounded-full p-2"
                       style={{
                         background: 'var(--color-card)',
                         boxShadow: 'var(--shadow-float)',

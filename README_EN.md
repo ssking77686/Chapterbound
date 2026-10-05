@@ -47,15 +47,28 @@ The project's standout feature. As you read, characters, locations, and monsters
 - Import EPUB with automatic cover and metadata extraction
 - Custom cover upload and reset
 - Auto-saved reading progress, picks up where you left off
+- Reading progress bar: drag-to-seek with precise page display
 - Adjustable font size, family, and line height, preferences persist
+- Page themes: 5 preset color schemes, independent of light/dark mode
 - Light / dark mode, manual toggle or follow system
 - Warm dark palette, easy on the eyes
 - Dual-page spread on wide screens, responsive library grid
 - Colored bookmarks (5 colors), sidebar management with jump-to
 - Text highlighting
 - TOC chapter navigation
+- Onboarding guide: 9-step interactive walkthrough on first visit, can be permanently dismissed
 
 ---
+
+## Platforms
+
+| Platform | How |
+|----------|-----|
+| Browser | `npm run dev` or deploy the static `dist/` directory |
+| Windows desktop | Tauri v2 (`npm run desktop:build`, produces an NSIS installer) |
+| Android phone | Capacitor wrapper, one-command APK build, sideload to distribute |
+
+One codebase, two shells, identical behavior. On Android you additionally get: **swipe / tap page turning**, **immersive mode via a tap in the middle of the text** (hides the toolbar and page number, giving one to two lines of text back), status-bar safe-area handling (toolbar automatically avoids notches/gesture zones), 44px touch hit targets, and back-button layer-by-layer exit.
 
 ## Quick Start
 
@@ -64,6 +77,10 @@ npm install
 npm run dev      # development server
 npm run build    # production build
 npm run lint     # lint
+
+# Android APK (requires JDK 21 + Android SDK, see Developer Docs)
+npm run android:build   # runs build + cap sync + assembleDebug; APK is copied to release/
+# don't run gradlew assembleDebug directly — it does not rebuild the web assets and ships stale ones
 ```
 
 ---
@@ -80,6 +97,40 @@ npm run lint     # lint
 ---
 
 ## Changelog
+
+**Unreleased** (2026-10)
+- Immersive mode (touch only): tap the middle of the text to hide the toolbar and page number, giving one to two lines back; tap again to restore. The left/right thirds still turn pages
+- Fixed the reading position drifting after a reflow: rotating, split-screen, the soft keyboard appearing, and toggling immersive mode no longer jump pages (it could previously jump several pages back, or to the start of the chapter)
+- Toolbar moved down 8px: clears the system anti-accidental-touch / notification-shade zone that made the toolbar untappable
+- Position relay: generate a portable short code for your current spot; paste or type it into the same book on another device to jump straight there — manual cross-device position hand-off, no cloud sync needed
+
+**v1.5.0** (2026-09)
+- Desktop migrated to Tauri v2: Electron removed; NSIS installer (`npm run desktop:build`, ~4.5 MB) rendered by the native Windows WebView2
+- Version unified: desktop / web / Android all aligned at v1.5.0
+- Dev docs synced: desktop build toolchain (MSYS2 + China-network bundling mirror workaround) documented in DEVELOPMENT.md; distribution sections updated in technical-audit.md
+
+**v1.4.0** (2026-08)
+- Mobile adaptation: Capacitor 8 wrapper — build an Android APK for sideload distribution
+- Touch page turning: swipe left/right to turn pages, tap either side of the screen (no conflict with long-press text selection)
+- Status-bar adaptation: toolbar automatically clears the notch / anti-accidental-touch zone; safe-area height injected natively; light/dark status bar follows the theme
+- Full-width sidebar: the sidebar spans the screen on phones with its own close button; back button exits layers in order (detail → sidebar → bookshelf)
+- Touch interaction completeness: delete/cover buttons always visible on the bookshelf, unified 44px hit targets, onboarding cards auto-scale to screen width
+- App icon: Android icon matches the EXE (dark brown background + red book)
+- Import convergence: EPUB only — other formats now show a clear message (previously they imported but couldn't open)
+
+**v1.3.2** (2026-08)
+- Security hardening: React Error Boundary for render-crash recovery, global unhandledrejection handler, transactional IndexedDB writes
+- User feedback: Toast notification system (success/error/info, animated via motion)
+- Data validation: Compendium JSON import runtime schema check, settings type validation
+- Compendium performance: search debounce, infinite scroll (50 per batch), animation delay cap, image lazy loading
+- Code health docs: `docs/technical-audit.md` — long-term maintained codebase reference
+
+**v1.3.0** (2026-08)
+- Onboarding system: auto-triggered on first visit, SVG mask capsule cutout highlights target elements with spring transitions, 6 steps covering import → open book → page turn → settings → compendium → bookmarks
+- Page theme system: 5 preset color schemes (White / Warm Yellow / Warm Brown / Dark Brown / Dark Green), theme selector in settings panel, reader background independent from light/dark mode
+- Reading progress bar: drag-to-seek bottom bar with precise page-ratio calculation
+- Dark mode color refinements
+- Fixed spread leakage with explicit field picking to prevent JSON contamination in IndexedDB
 
 **v1.2.0** (2026-08)
 - Compendium dual-column layout: profile info and reading content side-by-side on ultrawide screens

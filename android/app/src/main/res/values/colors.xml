@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 Web 层主题色对齐（src/index.css）：浅色纸 #F5F1EA / 深色纸 #2B2420 -->
+    <color name="statusBarLight">#F5F1EA</color>
+    <color name="statusBarDark">#2B2420</color>
+</resources>

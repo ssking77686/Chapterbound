@@ -5,12 +5,15 @@ import { useKeyboard } from '../hooks/useKeyboard'
 import { useBookshelfStore } from '../stores/bookshelfStore'
 import { useBookmarkStore } from '../stores/bookmarkStore'
 import { useHighlightStore } from '../stores/highlightStore'
-import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download, Search } from 'lucide-react'
+import { ArrowLeft, Bookmark, List, ChevronLeft, ChevronRight, Sun, Moon, Settings, X, ScrollText, Upload, User, MapPin, Skull, Download, Search, Copy } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useCompendiumStore, type SearchResult } from '../stores/compendiumStore'
+import { useToastStore } from '../stores/toastStore'
 import type { TOCItem } from '../core/types'
 import { PAGE_THEME_PRESETS } from '../data/themes'
+import { useIsTouch } from '../hooks/useIsTouch'
+import { makeFingerprint, encodeRelayCode, parseRelayInput } from '../utils/positionCode'
 
 interface Props {
   bookId: string
@@ -56,9 +59,14 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [compendiumSearch, setCompendiumSearch] = useState('')
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null)
   const searchEntries = useCompendiumStore((s) => s.searchEntries)
-  const [importMsg, setImportMsg] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [visibleCount, setVisibleCount] = useState(50)
   const [selData, setSelData] = useState<{ text: string; x: number; y: number } | null>(null)
   const [selResults, setSelResults] = useState<SearchResult[] | null>(null)
+  // 位置接力（设置面板内）：定位点就绪状态 / 生成的短码 / 待解析的输入
+  const [relayReady, setRelayReady] = useState(false)
+  const [relayCode, setRelayCode] = useState<string | null>(null)
+  const [relayInput, setRelayInput] = useState('')
 
   const [toc, setToc] = useState<TOCItem[]>([])
   const [sidebarTab, setSidebarTab] = useState<'toc' | 'bookmarks' | 'compendium' | 'settings' | null>(null)
@@ -67,6 +75,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [hoveredEdge, setHoveredEdge] = useState<'left' | 'right' | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [relationsExpanded, setRelationsExpanded] = useState(false)
+  const isTouch = useIsTouch()
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnDirection = useRef(0)
   const pageInfoRef = useRef(pageInfo)
@@ -74,6 +83,32 @@ export function ReaderPage({ bookId, onBack }: Props) {
   const [cardScope, cardAnimate] = useAnimate()
   const [bookmarkScope, bookmarkAnimate] = useAnimate()
   const { toggle: toggleTheme, isDark } = useTheme()
+
+  // 分类/搜索变更时重置可见数量
+  useEffect(() => {
+    setVisibleCount(50)
+  }, [debouncedSearch, compendiumCategory])
+
+  // 搜索防抖：条目 ≤50 即时响应，>50 延迟 150ms
+  useEffect(() => {
+    if (compendiumEntries.length <= 50) {
+      setDebouncedSearch(compendiumSearch)
+      return
+    }
+    const timer = setTimeout(() => setDebouncedSearch(compendiumSearch), 150)
+    return () => clearTimeout(timer)
+  }, [compendiumSearch, compendiumEntries.length])
+
+  // 关联计数缓存，详情弹窗中避免每次渲染都 O(N×R) 扫描
+  const globalRefCount = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of compendiumEntries) {
+      for (const r of e.relations) {
+        map.set(r.targetId, (map.get(r.targetId) ?? 0) + 1)
+      }
+    }
+    return map
+  }, [compendiumEntries])
 
   const handleNext = useCallback(() => {
     turnDirection.current = 1
@@ -113,6 +148,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
     getEngine()?.setPageColors(pageTheme)
   }, [pageTheme, pageInfo.total, getEngine])
 
+  // 页面数量（单页/自动）变化时更新引擎
+  useEffect(() => {
+    getEngine()?.setColumnMode(settings.columnMode)
+  }, [settings.columnMode, getEngine])
+
   // 监听选中文字事件，弹出检索按钮
   useEffect(() => {
     const engine = getEngine()
@@ -137,11 +177,122 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setSelResults(null)
   }, [pageKey])
 
+  // 位置接力：设置面板打开期间轮询定位点就绪（locations 在 load 后异步生成，一般几秒内完成）
+  useEffect(() => {
+    if (sidebarTab !== 'settings') return
+    const engine = getEngine()
+    if (!engine) return
+    if (engine.isLocationsReady()) {
+      setRelayReady(true)
+      return
+    }
+    setRelayReady(false)
+    const timer = setInterval(() => {
+      if (getEngine()?.isLocationsReady()) {
+        setRelayReady(true)
+        clearInterval(timer)
+      }
+    }, 600)
+    return () => clearInterval(timer)
+  }, [sidebarTab, getEngine])
+
+  const toolbarVisibleRef = useRef(true)
+  useEffect(() => {
+    toolbarVisibleRef.current = toolbarVisible
+  }, [toolbarVisible])
+
   const resetHideTimer = useCallback(() => {
     setToolbarVisible(true)
     if (hideTimer.current) clearTimeout(hideTimer.current)
+    // 触屏设备常显工具栏：自动渐隐会让按钮视觉消失、且呼出依赖 tap 区域判断，手机上容易找不到
+    if (isTouch) return
     hideTimer.current = setTimeout(() => setToolbarVisible(false), 3000)
-  }, [])
+  }, [isTouch])
+
+  // tap 中央：触屏切换沉浸模式（隐/显顶栏与页码）；桌面切换工具栏显隐
+  const toggleToolbar = useCallback(() => {
+    if (isTouch) {
+      // 沉浸模式是**手动、可逆**的切换，和那条被否掉的「3 秒自动渐隐」不是一回事：
+      // 那条的问题是按钮自己消失后用户不知道去哪找回；这里隐藏和恢复是同一个动作
+      //（再点一下中间），而且顶栏原本占的位置也仍然是「点一下唤回」的热区。
+      setToolbarVisible((v) => !v)
+      return
+    }
+    if (toolbarVisibleRef.current) {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+      setToolbarVisible(false)
+    } else {
+      resetHideTimer()
+    }
+  }, [isTouch, resetHideTimer])
+
+  // 沉浸模式（仅触屏）：顶栏与页码一起隐藏。桌面恒为 false —— 桌面顶栏是渐隐到 0.3，不隐藏。
+  const chromeHidden = isTouch && !toolbarVisible
+
+  // ── Android 返回键逐层退出（popstate 阶段；Phase 3 由 Capacitor backButton 叠加） ──
+  // 覆盖层栈：图鉴详情 > 侧栏 > 阅读器。popstate 处理器只读 ref，不依赖闭包捕获的 state。
+  const sidebarTabRef = useRef(sidebarTab)
+  const detailEntryIdRef = useRef(detailEntryId)
+  const pickerOpenRef = useRef(pickerOpen)
+  useEffect(() => { sidebarTabRef.current = sidebarTab }, [sidebarTab])
+  useEffect(() => { detailEntryIdRef.current = detailEntryId }, [detailEntryId])
+  useEffect(() => { pickerOpenRef.current = pickerOpen }, [pickerOpen])
+
+  const closeTopOverlay = useCallback(() => {
+    if (detailEntryIdRef.current !== null) {
+      setDetailEntryId(null)
+      setSidebarTab('compendium')
+    } else if (sidebarTabRef.current !== null) {
+      setSidebarTab(null)
+    } else if (pickerOpenRef.current) {
+      setPickerOpen(false)
+    } else {
+      onBack()
+    }
+  }, [onBack])
+
+  useEffect(() => {
+    history.pushState({ reader: true }, '')
+    const onPopState = () => {
+      const hadOverlay = detailEntryIdRef.current !== null
+        || sidebarTabRef.current !== null
+        || pickerOpenRef.current
+      closeTopOverlay()
+      // 覆盖层只更新 reader 条目的 state（不新增条目），返回键弹出的就是 reader 条目本身。
+      // 关掉覆盖层后条目已被弹出 → 重新压入，维持「关覆盖层 → 再按返回 → 退出阅读器」的逐层语义；
+      // 无覆盖层时是退出阅读器（onBack），不重压，卸载时历史栈恢复干净。
+      if (hadOverlay) history.pushState({ reader: true }, '')
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      // 卸载后清除 reader 标记，避免残留条目上的 popstate 误触发
+      if (history.state?.reader) history.replaceState(null, '')
+    }
+  }, [closeTopOverlay])
+
+  // 触屏手势订阅（B 类：事件仅由触屏环境下的引擎注册后才会发出）
+  useEffect(() => {
+    const engine = getEngine()
+    if (!engine || pageInfo.total === 0) return
+    const onSwipe = (...args: unknown[]) => {
+      const dir = args[0] as string
+      if (dir === 'left') handleNext()
+      else if (dir === 'right') handlePrev()
+    }
+    const onTap = (...args: unknown[]) => {
+      const { xRatio } = args[0] as { xRatio: number }
+      if (xRatio < 0.3) handlePrev()
+      else if (xRatio > 0.7) handleNext()
+      else toggleToolbar()
+    }
+    engine.on('gesture:swipe', onSwipe)
+    engine.on('gesture:tap', onTap)
+    return () => {
+      engine.off('gesture:swipe', onSwipe)
+      engine.off('gesture:tap', onTap)
+    }
+  }, [getEngine, pageInfo.total, handleNext, handlePrev, toggleToolbar])
 
   useEffect(() => {
     return () => {
@@ -155,22 +306,32 @@ export function ReaderPage({ bookId, onBack }: Props) {
     return loc ? getBookmarkAt(loc) : undefined
   }, [currentLocation, getBookmarkAt])
 
+  // 打开侧栏：更新 reader 条目的 state 而非新增历史条目（历史栈恒为两条，返回键逐层退出）
+  const openSidebar = useCallback((tab: 'toc' | 'bookmarks' | 'compendium' | 'settings') => {
+    setSidebarTab(tab)
+    history.replaceState({ reader: true, sidebar: tab }, '')
+  }, [])
+
   const handleBookmarkClick = useCallback(() => {
     const loc = currentLocation()
     if (!loc) return
     const existing = getBookmarkAt(loc)
     if (existing) {
       // 已有书签 → 打开书签列表
-      setSidebarTab('bookmarks')
+      openSidebar('bookmarks')
       return
     }
-    setPickerOpen((p) => !p)
-  }, [currentLocation, getBookmarkAt])
+    // picker 纳入返回键栈：状态与历史 state 同步（replaceState 不新增条目）
+    const next = !pickerOpen
+    setPickerOpen(next)
+    history.replaceState({ reader: true, picker: next }, '')
+  }, [currentLocation, getBookmarkAt, openSidebar, pickerOpen])
 
   const handlePickColor = useCallback(async (color: string) => {
     const loc = currentLocation()
     if (!loc) return
     setPickerOpen(false)
+    history.replaceState({ reader: true }, '')
     const { current, total } = pageInfoRef.current
     const progress = total > 0 ? Math.round((current / total) * 100) : 50
     await addBookmark(bookId, loc, `书签 ${bookmarks.length + 1}`, color, progress)
@@ -185,7 +346,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
     if (!engine) return
     const items = await engine.getTOC()
     setToc(items)
-    setSidebarTab('toc')
+    openSidebar('toc')
   }
 
   const handleSettingsChange = (patch: Partial<typeof settings>) => {
@@ -204,12 +365,10 @@ export function ReaderPage({ bookId, onBack }: Props) {
         const text = await file.text()
         const json = JSON.parse(text)
         await compendiumImport(bookId, json, getCurrentChapter())
-        setImportMsg('导入成功')
-        setTimeout(() => setImportMsg(''), 2000)
+        useToastStore.getState().toast('导入成功', 'success')
       } catch (e) {
         console.error('[import] failed:', e)
-        setImportMsg('导入失败，请检查 JSON 格式')
-        setTimeout(() => setImportMsg(''), 3000)
+        useToastStore.getState().toast('导入失败，请检查 JSON 格式', 'error', 4000)
       }
       input.remove()
     }
@@ -222,7 +381,114 @@ export function ReaderPage({ bookId, onBack }: Props) {
     setDetailEntryId(id)
     setSidebarTab(null)
     setRelationsExpanded(false)
+    history.replaceState({ reader: true, detail: id }, '')
   }, [])
+
+  // ── 位置接力：生成端与接收端 ──
+
+  const copyRelayText = useCallback(async (text: string, okMsg: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      useToastStore.getState().toast(okMsg, 'success')
+    } catch {
+      // 降级：临时 textarea + execCommand（WebView 里 clipboard API 偶尔不可用）
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        const ok = document.execCommand('copy')
+        ta.remove()
+        useToastStore.getState().toast(ok ? okMsg : '复制失败，请长按选择文本手动复制', ok ? 'success' : 'error')
+      } catch {
+        useToastStore.getState().toast('复制失败，请长按选择文本手动复制', 'error')
+      }
+    }
+  }, [])
+
+  const handleGenerateRelayCode = useCallback(() => {
+    const engine = getEngine()
+    if (!engine) return
+    if (!engine.isLocationsReady()) {
+      useToastStore.getState().toast('定位点还在生成，稍等几秒再试', 'info')
+      return
+    }
+    const index = engine.getCurrentLocationIndex()
+    if (index < 0) {
+      useToastStore.getState().toast('拿不到当前位置', 'error')
+      return
+    }
+    const fingerprint = makeFingerprint(engine.getFileSize(), engine.getFileHead())
+    setRelayCode(encodeRelayCode(fingerprint, index))
+  }, [getEngine])
+
+  const handleRelayJump = useCallback(() => {
+    const engine = getEngine()
+    if (!engine) return
+    const toast = useToastStore.getState().toast
+    const parsed = parseRelayInput(relayInput)
+    // 书名校验（输入里带《书名》时）：不匹配硬拒绝——位置语义跨书本来就不成立
+    if (parsed.title && book?.title && parsed.title !== book.title) {
+      toast(`这码来自《${parsed.title}》，请先打开那本书`, 'error', 4000)
+      return
+    }
+    // 跳转后统一收尾：清输入、关设置面板（与目录/书签点击一致）、报落点
+    const finish = (percentText: string) => {
+      setRelayInput('')
+      setSidebarTab(null)
+      history.replaceState({ reader: true }, '')
+      toast(`已跳到 · ${percentText}`, 'success')
+    }
+    // 短码在 → 先过"书身份"闸（指纹）。它只做校验：跳转坐标另有优先级。
+    if (parsed.shortcode) {
+      const fingerprint = makeFingerprint(engine.getFileSize(), engine.getFileHead())
+      if (parsed.shortcode.fingerprint !== fingerprint) {
+        toast('这码属于另一本书（指纹不匹配）', 'error', 4000)
+        return
+      }
+    }
+    // 坐标三选一：CFI（若输入里带了，逐字精确）＞ 短码序号（±约一段）＞ 百分比。
+    // 三条路径都以"真的发起跳转"为准：失败就报错不关面板，不许报假成功。
+    if (parsed.cfi) {
+      if (!engine.goToRelayCfi(parsed.cfi)) {
+        toast('这条 CFI 解析不了，检查一下卡片第 3 行', 'error', 4000)
+        return
+      }
+      finish(`${engine.getProgressForLocation(parsed.cfi)}%`)
+      return
+    }
+    if (parsed.shortcode) {
+      if (!engine.goToLocationIndex(parsed.shortcode.locationIndex)) {
+        toast('定位点还没就绪，稍等几秒再试', 'error')
+        return
+      }
+      finish(`${(engine.getPercentForIndex(parsed.shortcode.locationIndex) * 100).toFixed(1)}%`)
+      return
+    }
+    if (parsed.percent != null) {
+      if (!(parsed.percent >= 0 && parsed.percent <= 100)) {
+        toast('百分比超出范围', 'error')
+        return
+      }
+      if (!engine.goToPercentage(parsed.percent / 100)) {
+        toast('定位点还没就绪，稍等几秒再试', 'error')
+        return
+      }
+      finish(`${parsed.percent.toFixed(1)}%`)
+      return
+    }
+    if (parsed.shortcodeError) {
+      toast(parsed.shortcodeError === 'version' ? '这码来自另一个版本的 App（或抄错了）' : '码可能抄错了，检查一下', 'error', 4000)
+      return
+    }
+    if (parsed.title) {
+      toast(`只认出了书名《${parsed.title}》，没有位置信息`, 'error')
+      return
+    }
+    toast('没认出这条位置码', 'error')
+  }, [relayInput, getEngine, book])
 
   const toolbarBg = 'var(--color-toolbar)'
   const toolbarBlur = 'blur(24px) saturate(180%)'
@@ -240,18 +506,29 @@ export function ReaderPage({ bookId, onBack }: Props) {
 
   return (
     <div
-      className="relative flex h-screen flex-col"
+      className="reader-touch relative flex h-screen flex-col"
       style={{ background: 'var(--color-page-bg)' }}
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
     >
-      {/* 材质化工具栏 — 自动渐隐 */}
+      {/* 材质化工具栏 — 桌面自动渐隐；触屏由「点中间」切换沉浸模式 */}
       <motion.header
         className="relative z-10 flex items-center gap-1 px-2 py-2"
         style={{
           background: toolbarBg,
           backdropFilter: toolbarBlur,
           WebkitBackdropFilter: toolbarBlur,
+          // 沉浸模式下用 display:none 而不是「透明 + pointer-events:none」：一次同时做到
+          // ①从布局里移除（把这条高度还给正文，卡片随之变高）②不可点击。
+          // 分成两个属性写迟早会漏一个 —— 项目里已经有「看不见却可点」的旧账。
+          // 刻意**不做高度动画**：高度每变一帧，useReader 的 ResizeObserver 就会触发一次
+          // engine.resize() → epub.js 重排一次，那会变成十几连排。
+          display: chromeHidden ? 'none' : undefined,
+          // 净空 = 状态栏高度 + 8px。那 8px 是给安卓顶部防误触/下拉通知区的：
+          // 它通常比状态栏本身更高，贴边那一横带点不动（历史 bug 清单里的「顶栏无法点击」）。
+          paddingTop: 'calc(1rem + var(--safe-top))',
+          paddingLeft: 'calc(0.5rem + var(--safe-left))',
+          paddingRight: 'calc(0.5rem + var(--safe-right))',
         }}
         animate={{
           opacity: toolbarVisible ? 1 : 0.3,
@@ -260,7 +537,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
       >
         <motion.button
           onClick={onBack}
-          className="rounded-full p-2.5"
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -275,95 +552,105 @@ export function ReaderPage({ bookId, onBack }: Props) {
         >
           {book?.title ?? '阅读中'}
         </span>
-        <div className="relative">
-          <motion.button
-            ref={bookmarkScope}
-            onClick={handleBookmarkClick}
-            className="rounded-full p-2.5"
-            whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
-            whileTap={{ scale: 0.94 }}
-            transition={springPress}
-            style={{ color: currentBookmark()?.color ?? 'var(--color-text)' }}
-            aria-label="添加书签"
-          >
-            <Bookmark
-              className="h-5 w-5"
-              fill={currentBookmark() ? (currentBookmark()!.color) : 'none'}
-            />
-          </motion.button>
-          <AnimatePresence>
-            {pickerOpen && (
-              <>
-                <motion.div
-                  className="fixed inset-0 z-10"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  onClick={() => setPickerOpen(false)}
-                />
-                <motion.div
-                  className="absolute right-0 top-full z-20 mt-2 flex gap-2 rounded-2xl px-3 py-2.5"
-                  style={{
-                    background: toolbarBg,
-                    backdropFilter: toolbarBlur,
-                    WebkitBackdropFilter: toolbarBlur,
-                    boxShadow: 'var(--shadow-float)',
-                    border: '1px solid var(--color-separator)',
-                  }}
-                  initial={{ scale: 0.7, opacity: 0, y: -8 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.7, opacity: 0, y: -8 }}
-                  transition={springBounce}
-                >
-                  {bookmarkColors.map((c) => (
-                    <motion.button
-                      key={c.value}
-                      className="rounded-full"
-                      style={{
-                        width: 22,
-                        height: 22,
-                        background: c.value,
-                        boxShadow: `0 0 0 2px var(--color-card), 0 2px 8px ${c.value}40`,
-                      }}
-                      whileHover={{ scale: 1.3 }}
-                      whileTap={{ scale: 0.9 }}
-                      transition={springPress}
-                      onClick={() => handlePickColor(c.value)}
-                      aria-label={c.name}
-                    />
-                  ))}
-                  <div
-                    className="mx-0.5 self-stretch"
-                    style={{
-                      width: 1,
-                      background: 'var(--color-separator)',
-                    }}
-                  />
+        <motion.button
+          ref={bookmarkScope}
+          onClick={handleBookmarkClick}
+          className="icon-btn rounded-full p-2.5"
+          whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+          whileTap={{ scale: 0.94 }}
+          transition={springPress}
+          style={{ color: currentBookmark()?.color ?? 'var(--color-text)' }}
+          aria-label="添加书签"
+        >
+          <Bookmark
+            className="h-5 w-5"
+            fill={currentBookmark() ? (currentBookmark()!.color) : 'none'}
+          />
+        </motion.button>
+        {/* 取色气泡直接挂在 header 下（header 自身 relative）——锚点是屏幕右缘，不是按钮右缘。
+            按钮右侧还排着主题/目录/图鉴/设置 4 个图标，锚按钮右缘会让 270px 宽的气泡
+            向左溢出屏幕；触屏下按钮被 .icon-btn 撑到 44px，溢出更严重（<470px 视口即开始，
+            360px 机上 5 个色块有 3 个既看不见也点不到）。 */}
+        <AnimatePresence>
+          {pickerOpen && (
+            <>
+              <motion.div
+                className="fixed inset-0 z-10"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => {
+                  setPickerOpen(false)
+                  history.replaceState({ reader: true }, '')
+                }}
+              />
+              <motion.div
+                className="absolute top-full z-20 mt-2 flex gap-2 rounded-2xl px-3 py-2.5"
+                style={{
+                  // 贴屏幕右缘（含横屏刘海安全区），不再贴按钮右缘
+                  right: 'calc(0.5rem + var(--safe-right))',
+                  background: toolbarBg,
+                  backdropFilter: toolbarBlur,
+                  WebkitBackdropFilter: toolbarBlur,
+                  boxShadow: 'var(--shadow-float)',
+                  border: '1px solid var(--color-separator)',
+                }}
+                initial={{ scale: 0.7, opacity: 0, y: -8 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.7, opacity: 0, y: -8 }}
+                transition={springBounce}
+              >
+                {bookmarkColors.map((c) => (
                   <motion.button
-                    className="flex items-center justify-center rounded-full"
+                    key={c.value}
+                    className="rounded-full"
                     style={{
-                      width: 22,
-                      height: 22,
-                      background: 'var(--color-card)',
-                      border: '1px solid var(--color-separator)',
+                      width: isTouch ? 32 : 22,
+                      height: isTouch ? 32 : 22,
+                      background: c.value,
+                      boxShadow: `0 0 0 2px var(--color-card), 0 2px 8px ${c.value}40`,
                     }}
                     whileHover={{ scale: 1.3 }}
                     whileTap={{ scale: 0.9 }}
                     transition={springPress}
-                    onClick={() => setPickerOpen(false)}
-                    aria-label="关闭"
-                  >
-                    <X className="h-2.5 w-2.5" style={{ color: 'var(--color-text-secondary)' }} />
-                  </motion.button>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+                    onClick={() => handlePickColor(c.value)}
+                    aria-label={c.name}
+                  />
+                ))}
+                <div
+                  className="mx-0.5 self-stretch"
+                  style={{
+                    width: 1,
+                    background: 'var(--color-separator)',
+                  }}
+                />
+                <motion.button
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: isTouch ? 32 : 22,
+                    height: isTouch ? 32 : 22,
+                    background: 'var(--color-card)',
+                    border: '1px solid var(--color-separator)',
+                  }}
+                  whileHover={{ scale: 1.3 }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={springPress}
+                  onClick={() => {
+                    setPickerOpen(false)
+                    history.replaceState({ reader: true }, '')
+                  }}
+                  aria-label="关闭"
+                >
+                  <X className="h-2.5 w-2.5" style={{ color: 'var(--color-text-secondary)' }} />
+                </motion.button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
         <motion.button
           onClick={toggleTheme}
-          className="rounded-full p-2.5"
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -374,7 +661,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
         </motion.button>
         <motion.button
           onClick={handleShowToc}
-          className="rounded-full p-2.5"
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -387,9 +674,9 @@ export function ReaderPage({ bookId, onBack }: Props) {
           onClick={async () => {
             await compendiumLoad(bookId)
             compendiumMarkViewed()
-            setSidebarTab('compendium')
+            openSidebar('compendium')
           }}
-          className="relative rounded-full p-2.5"
+          className="icon-btn relative rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -416,8 +703,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           })()}
         </motion.button>
         <motion.button
-          onClick={() => setSidebarTab('settings')}
-          className="rounded-full p-2.5"
+          onClick={() => openSidebar('settings')}
+          className="icon-btn rounded-full p-2.5"
           whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
           whileTap={{ scale: 0.94 }}
           transition={springPress}
@@ -430,7 +717,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
       </motion.header>
 
       {/* 阅读区域 */}
-      <div className="relative flex-1 overflow-hidden px-4 pb-4 pt-2">
+      <div
+        className="relative flex-1 overflow-hidden px-4 pb-4 pt-2"
+        style={{
+          paddingLeft: 'calc(1rem + var(--safe-left))',
+          paddingRight: 'calc(1rem + var(--safe-right))',
+        }}
+      >
         {error && pageInfo.total === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4">
             <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
@@ -460,6 +753,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             background: 'var(--color-card)',
             borderRadius: 'var(--radius-card)',
             boxShadow: 'var(--shadow-card)',
+            ...(settings.pageWidth > 0 ? { maxWidth: settings.pageWidth } : {}),
           }}
           onMouseMove={(e) => {
             resetHideTimer()
@@ -471,6 +765,8 @@ export function ReaderPage({ bookId, onBack }: Props) {
           }}
           onMouseLeave={() => setHoveredEdge(null)}
           onClick={(e) => {
+            // 触屏翻页由引擎手势（gesture:tap/swipe）接管，避免与 click 双重翻页
+            if (isTouch) return
             const relX = e.clientX - e.currentTarget.getBoundingClientRect().left
             const mid = e.currentTarget.clientWidth / 2
             if (relX < mid) handlePrev()
@@ -498,7 +794,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
             </div>
           )}
 
-          <div ref={containerRef} className="h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
+          <div ref={containerRef} className="reader-touch h-full w-full" style={{ borderRadius: 'var(--radius-card)' }} />
 
           {/* 选中文字检索浮窗 */}
           {selData && !selResults && (
@@ -613,16 +909,20 @@ export function ReaderPage({ bookId, onBack }: Props) {
                         getEngine()?.goToLocation(bm.location)
                       }}
                       aria-label={`跳转到书签：${bm.label}`}
+                      style={isTouch ? { padding: 12 } : undefined}
                     >
                       <span
                         className="block rounded-full opacity-30 transition-opacity duration-200 group-hover/dot:opacity-100"
                         style={{
-                          width: 8,
-                          height: 8,
+                          width: isTouch ? 12 : 8,
+                          height: isTouch ? 12 : 8,
                           background: bm.color,
                           boxShadow: `0 0 6px ${bm.color}60`,
+                          opacity: isTouch ? 0.85 : undefined,
                         }}
                       />
+                      {/* 触屏下不显示 label（无 hover，且右侧空间宝贵） */}
+                      {!isTouch && (
                       <span
                         className="pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium group-hover/dot:inline-block"
                         style={{
@@ -636,6 +936,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       >
                         {bm.label}
                       </span>
+                      )}
                     </motion.button>
                   </div>
                 )
@@ -656,25 +957,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
               : 'linear-gradient(to right, rgba(184,124,75,0.08), transparent)',
           }}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'left' ? 1 : 0.4,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'left' ? 1 : 0.4,
           }}
           transition={{ duration: 0.35 }}
         />
 
-        {/* 左翻页按钮 — 全高长条 */}
+        {/* 左翻页按钮 — 全高长条（触屏下隐藏，由手势接管） */}
         <motion.button
           onClick={handlePrev}
           className="absolute left-2 z-10 flex items-center justify-center rounded-2xl px-1"
           style={{
             top: 8,
             bottom: 8,
+            pointerEvents: isTouch ? 'none' : 'auto',
             ...navButtonClass,
           }}
           whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
           whileTap={{ scale: 0.96 }}
           transition={springDefault}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'left' ? 0.85 : 0.2,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'left' ? 0.85 : 0.2,
           }}
           aria-label="上一页"
         >
@@ -693,25 +995,26 @@ export function ReaderPage({ bookId, onBack }: Props) {
               : 'linear-gradient(to left, rgba(184,124,75,0.08), transparent)',
           }}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 1 : 0.4,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'right' ? 1 : 0.4,
           }}
           transition={{ duration: 0.35 }}
         />
 
-        {/* 右翻页按钮 — 全高长条 */}
+        {/* 右翻页按钮 — 全高长条（触屏下隐藏，由手势接管） */}
         <motion.button
           onClick={handleNext}
           className="absolute right-2 z-10 flex items-center justify-center rounded-2xl px-1"
           style={{
             top: 8,
             bottom: 8,
+            pointerEvents: isTouch ? 'none' : 'auto',
             ...navButtonClass,
           }}
           whileHover={{ scale: 1.04, boxShadow: isDark ? '0 0 36px rgba(212,153,106,0.30)' : '0 0 20px rgba(184,124,75,0.18)' }}
           whileTap={{ scale: 0.96 }}
           transition={springDefault}
           animate={{
-            opacity: toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
+            opacity: isTouch ? 0 : toolbarVisible ? 0 : hoveredEdge === 'right' ? 0.85 : 0.2,
           }}
           aria-label="下一页"
           data-onboarding-id="page-turn-right"
@@ -722,12 +1025,13 @@ export function ReaderPage({ bookId, onBack }: Props) {
       )}
       </div>
 
-      {/* 页码 — 浮动胶囊 */}
+      {/* 页码 — 浮动胶囊（沉浸模式下一并隐去） */}
       <AnimatePresence>
-        {pageInfo.total > 0 && (
+        {pageInfo.total > 0 && !chromeHidden && (
           <motion.div
-            className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2"
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2"
             key={pageKey}
+            style={{ bottom: 'calc(1.5rem + var(--safe-bottom))' }}
             initial={{ y: 6, opacity: 0, scale: 0.9 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -6, opacity: 0 }}
@@ -760,30 +1064,36 @@ export function ReaderPage({ bookId, onBack }: Props) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               style={{ background: 'rgba(60,50,38,0.15)' }}
-              onClick={() => setSidebarTab(null)}
+              onClick={() => {
+                setSidebarTab(null)
+                history.replaceState({ reader: true }, '')
+              }}
             />
             <motion.nav
-              className="w-72 overflow-y-auto"
+              className={`${isTouch ? 'w-full max-w-[420px]' : 'w-72'} overflow-y-auto`}
               style={{
                 background: toolbarBg,
                 backdropFilter: toolbarBlur,
                 WebkitBackdropFilter: toolbarBlur,
                 borderLeft: '1px solid var(--color-separator)',
+                paddingTop: 'var(--safe-top)',
+                paddingBottom: 'var(--safe-bottom)',
+                paddingRight: 'var(--safe-right)',
               }}
-              initial={{ x: 288 }}
+              initial={{ x: '100%' }}
               animate={{ x: 0 }}
-              exit={{ x: 288 }}
+              exit={{ x: '100%' }}
               transition={springSlide}
             >
-              {/* Tab 栏 */}
+              {/* Tab 栏 + 关闭按钮 */}
               <div
-                className="flex border-b px-5 pt-5 pb-0"
+                className="flex items-center border-b px-5 pt-5 pb-0"
                 style={{ borderColor: 'var(--color-separator)' }}
               >
                 {sidebarTabs.map((tab) => (
                   <button
                     key={tab.key}
-                    className="relative flex-1 pb-3 text-sm font-medium transition-colors"
+                    className={`relative flex-1 pb-3 text-sm font-medium transition-colors ${isTouch ? 'min-h-11' : ''}`}
                     style={{
                       color: sidebarTab === tab.key ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     }}
@@ -801,6 +1111,21 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     )}
                   </button>
                 ))}
+                {/* 显式关闭按钮：手机上没有 hover 遮罩提示，需要可见的退出入口 */}
+                <motion.button
+                  onClick={() => {
+                    setSidebarTab(null)
+                    history.replaceState({ reader: true }, '')
+                  }}
+                  className="icon-btn mb-2 ml-1 flex-shrink-0 rounded-full"
+                  whileHover={{ scale: 1.08, background: 'rgba(60,50,38,0.06)' }}
+                  whileTap={{ scale: 0.94 }}
+                  transition={springPress}
+                  style={{ color: 'var(--color-text)' }}
+                  aria-label="关闭侧栏"
+                >
+                  <X className="h-5 w-5" />
+                </motion.button>
               </div>
 
               {/* 目录面板 */}
@@ -809,7 +1134,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   {toc.map((item, i) => (
                     <motion.button
                       key={i}
-                      className="block w-full rounded-lg py-2.5 text-left text-sm font-medium"
+                      className={`block w-full rounded-lg py-2.5 text-left text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
                       style={{
                         paddingLeft: item.level * 14 + 8,
                         color: 'var(--color-text)',
@@ -820,6 +1145,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       onClick={() => {
                         getEngine()?.goToLocation(item.href)
                         setSidebarTab(null)
+                        history.replaceState({ reader: true }, '')
                       }}
                     >
                       {item.label}
@@ -866,10 +1192,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             style={{ background: bm.color, marginLeft: 0 }}
                           />
                           <button
-                            className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                            className={`min-w-0 flex-1 px-3 py-2.5 text-left ${isTouch ? 'min-h-11' : ''}`}
                             onClick={() => {
                               getEngine()?.goToLocation(bm.location)
                               setSidebarTab(null)
+                              history.replaceState({ reader: true }, '')
                             }}
                           >
                             <p
@@ -894,7 +1221,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                             </p>
                           </button>
                           <motion.button
-                            className="flex-shrink-0 rounded-full p-2.5"
+                            className="icon-btn flex-shrink-0 rounded-full p-2.5"
                             whileHover={{ scale: 1.15 }}
                             whileTap={{ scale: 0.9 }}
                             transition={springPress}
@@ -973,7 +1300,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   {/* 条目列表 */}
                   <div className="flex-1 overflow-y-auto px-4 pb-4">
                     {(() => {
-                      const searchQuery = compendiumSearch.trim()
+                      const searchQuery = debouncedSearch.trim()
                       const filtered = searchQuery
                         ? searchEntries(searchQuery, compendiumCategory)
                         : getEntriesByCategory(compendiumCategory).map((e) => ({ entry: e, score: 0 }))
@@ -1029,16 +1356,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
                               >
                                 使用说明
                               </a>
-                              {importMsg && (
-                                <motion.p
-                                  className="text-xs"
-                                  initial={{ opacity: 0, y: 4 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  style={{ color: importMsg.includes('失败') ? 'var(--color-danger)' : 'var(--color-accent)' }}
-                                >
-                                  {importMsg}
-                                </motion.p>
-                              )}
                             </div>
                           )
                         }
@@ -1070,75 +1387,94 @@ export function ReaderPage({ bookId, onBack }: Props) {
                           </div>
                         )
                       }
-                      return filtered.map(({ entry }, i) => {
-                        const unlockedCount = (entry.entries ?? []).filter((r) => r.unlocked).length
-                        const totalCount = (entry.entries ?? []).length
-                        return (
-                          <motion.button
-                            key={entry.id}
-                            className="mb-2 flex w-full items-center gap-3 rounded-xl p-2.5 text-left"
-                            style={{
-                              background: 'var(--color-card)',
-                              boxShadow: 'var(--shadow-card)',
-                            }}
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ ...springDefault, delay: i * 0.04 }}
-                            whileHover={{ y: -1, boxShadow: 'var(--shadow-float)' }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleShowEntryDetail(entry.id)}
-                          >
-                            <div
-                              className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
-                              style={{ background: 'var(--color-separator)' }}
-                            >
-                              {entry.image ? (
-                                <img src={entry.image} alt={entry.name} className="h-full w-full object-cover" />
-                              ) : (
-                                entry.category === 'character' ? <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
-                                entry.category === 'location' ? <MapPin className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
-                                <Skull className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p
-                                className="truncate text-[0.9375rem] font-medium"
-                                style={{ color: 'var(--color-text)' }}
+                      const visible = filtered.slice(0, visibleCount)
+                      return (
+                        <>
+                          {visible.map(({ entry }, i) => {
+                            const unlockedCount = (entry.entries ?? []).filter((r) => r.unlocked).length
+                            const totalCount = (entry.entries ?? []).length
+                            return (
+                              <motion.button
+                                key={entry.id}
+                                className="mb-2 flex w-full items-center gap-3 rounded-xl p-2.5 text-left"
+                                style={{
+                                  background: 'var(--color-card)',
+                                  boxShadow: 'var(--shadow-card)',
+                                }}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ ...springDefault, delay: Math.min(i * 0.04, 0.5) }}
+                                whileHover={{ y: -1, boxShadow: 'var(--shadow-float)' }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => handleShowEntryDetail(entry.id)}
                               >
-                                {entry.name}
-                              </p>
-                              <p
-                                className="truncate text-[0.8125rem]"
-                                style={{ color: 'var(--color-text-secondary)' }}
-                              >
-                                {entry.description}
-                              </p>
-                            </div>
-                            <div className="flex flex-shrink-0 items-center gap-1">
-                              <span
-                                className="text-xs font-medium"
-                                style={{ color: 'var(--color-text-secondary)' }}
-                              >
-                                {unlockedCount}/{totalCount}
-                              </span>
-                              {totalCount > 0 && (
                                 <div
-                                  className="h-1 w-8 overflow-hidden rounded-full"
+                                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
                                   style={{ background: 'var(--color-separator)' }}
                                 >
-                                  <div
-                                    className="h-full rounded-full transition-all duration-500"
-                                    style={{
-                                      width: `${(unlockedCount / totalCount) * 100}%`,
-                                      background: 'var(--color-accent)',
-                                    }}
-                                  />
+                                  {entry.image ? (
+                                    <img src={entry.image} alt={entry.name} className="h-full w-full object-cover" loading="lazy" />
+                                  ) : (
+                                    entry.category === 'character' ? <User className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
+                                    entry.category === 'location' ? <MapPin className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} /> :
+                                    <Skull className="h-5 w-5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </motion.button>
-                        )
-                      })
+                                <div className="min-w-0 flex-1">
+                                  <p
+                                    className="truncate text-[0.9375rem] font-medium"
+                                    style={{ color: 'var(--color-text)' }}
+                                  >
+                                    {entry.name}
+                                  </p>
+                                  <p
+                                    className="truncate text-[0.8125rem]"
+                                    style={{ color: 'var(--color-text-secondary)' }}
+                                  >
+                                    {entry.description}
+                                  </p>
+                                </div>
+                                <div className="flex flex-shrink-0 items-center gap-1">
+                                  <span
+                                    className="text-xs font-medium"
+                                    style={{ color: 'var(--color-text-secondary)' }}
+                                  >
+                                    {unlockedCount}/{totalCount}
+                                  </span>
+                                  {totalCount > 0 && (
+                                    <div
+                                      className="h-1 w-8 overflow-hidden rounded-full"
+                                      style={{ background: 'var(--color-separator)' }}
+                                    >
+                                      <div
+                                        className="h-full rounded-full transition-all duration-500"
+                                        style={{
+                                          width: `${(unlockedCount / totalCount) * 100}%`,
+                                          background: 'var(--color-accent)',
+                                        }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.button>
+                            )
+                          })}
+                          {filtered.length > visibleCount && (
+                            <motion.button
+                              className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium"
+                              style={{
+                                color: 'var(--comp-accent, #C9A96E)',
+                                border: '1px dashed var(--comp-separator)',
+                              }}
+                              whileHover={{ background: 'var(--comp-card)' }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setVisibleCount((v) => v + 50)}
+                            >
+                              加载更多 ({filtered.length - visibleCount})
+                            </motion.button>
+                          )}
+                        </>
+                      )
                     })()}
                     {/* 底部常驻入口 — 有数据后仍然可见 */}
                     {compendiumEntries.length > 0 && (
@@ -1326,6 +1662,81 @@ export function ReaderPage({ bookId, onBack }: Props) {
                     </div>
                   </div>
 
+                  {/* 页面布局 */}
+                  <div>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      页面布局
+                    </p>
+
+                    {/* 宽度档位 — 分段控制器 */}
+                    <div
+                      className="relative flex rounded-lg p-0.5"
+                      style={{ background: 'var(--color-separator)' }}
+                    >
+                      {([
+                        { label: '紧凑', value: 600 },
+                        { label: '标准', value: 800 },
+                        { label: '宽阔', value: 1100 },
+                        { label: '自适应', value: 0 },
+                      ] as const).map((opt) => {
+                        const active = settings.pageWidth === opt.value
+                        return (
+                          <motion.button
+                            key={opt.value}
+                            className="relative flex-1 rounded-md py-2 text-sm font-medium"
+                            style={{ color: active ? 'var(--color-text)' : 'var(--color-text-secondary)' }}
+                            whileTap={{ scale: 0.96 }}
+                            transition={springPress}
+                            onClick={() => handleSettingsChange({ pageWidth: opt.value })}
+                          >
+                            {active && (
+                              <motion.div
+                                layoutId="page-width-indicator"
+                                className="absolute inset-1 rounded-sm"
+                                style={{ background: 'var(--color-card)', boxShadow: 'var(--shadow-card)' }}
+                                transition={springDefault}
+                              />
+                            )}
+                            <span className="relative z-10">{opt.label}</span>
+                          </motion.button>
+                        )
+                      })}
+                    </div>
+
+                    {/* 单页模式 — toggle */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <p
+                        className="text-xs font-medium tracking-[0.005em]"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        单页模式
+                      </p>
+                      <motion.button
+                        className="relative flex h-7 w-11 items-center rounded-full"
+                        style={{
+                          background: settings.columnMode === 'single' ? 'var(--color-accent)' : 'var(--color-separator)',
+                        }}
+                        whileTap={{ scale: 0.94 }}
+                        transition={springPress}
+                        onClick={() => handleSettingsChange({
+                          columnMode: settings.columnMode === 'single' ? 'auto' : 'single',
+                        })}
+                        role="switch"
+                        aria-checked={settings.columnMode === 'single'}
+                        aria-label="单页模式"
+                      >
+                        <motion.div
+                          className="h-5 w-5 rounded-full bg-white shadow-sm"
+                          animate={{ x: settings.columnMode === 'single' ? 20 : 3 }}
+                          transition={{ type: 'spring' as const, bounce: 0, duration: 0.25 }}
+                        />
+                      </motion.button>
+                    </div>
+                  </div>
+
                   {/* 进度条开关 */}
                   <div className="flex items-center justify-between">
                     <p
@@ -1353,6 +1764,94 @@ export function ReaderPage({ bookId, onBack }: Props) {
                       />
                     </motion.button>
                   </div>
+
+                  {/* 位置接力 —— 跨设备手动搬运阅读位置（无需云同步） */}
+                  <div className="border-t pt-6" style={{ borderColor: 'var(--color-separator)' }}>
+                    <p
+                      className="mb-2 text-xs font-medium tracking-[0.005em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      位置接力
+                    </p>
+                    <p
+                      className="mb-3 text-xs leading-[1.7]"
+                      style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}
+                    >
+                      换设备阅读时：先在这里生成并复制短码，在另一台设备打开同一本书后，粘贴到下框里即可直达。
+                    </p>
+
+                    {/* 生成短码 */}
+                    <motion.button
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
+                      style={{
+                        background: relayReady ? 'var(--color-accent)' : 'var(--color-separator)',
+                        color: relayReady ? '#fff' : 'var(--color-text-secondary)',
+                      }}
+                      whileHover={relayReady ? { scale: 1.02 } : undefined}
+                      whileTap={relayReady ? { scale: 0.98 } : undefined}
+                      transition={springPress}
+                      onClick={handleGenerateRelayCode}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {relayReady ? '生成短码' : '定位点生成中…'}
+                    </motion.button>
+
+                    {relayCode && (
+                      <div className="mt-3">
+                        <div
+                          className="select-text rounded-xl px-3 py-2.5 text-center text-sm tracking-[0.15em]"
+                          style={{
+                            background: 'var(--color-card)',
+                            border: '1px solid var(--color-separator)',
+                            color: 'var(--color-text)',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                          }}
+                        >
+                          {relayCode}
+                        </div>
+                        <motion.button
+                          className={`mt-2 flex w-full items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs ${isTouch ? 'min-h-11' : ''}`}
+                          style={{ color: 'var(--color-text)', border: '1px solid var(--color-separator)' }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          transition={springPress}
+                          onClick={() => copyRelayText(relayCode, '短码已复制')}
+                        >
+                          <Copy className="h-3 w-3" />
+                          复制短码
+                        </motion.button>
+                      </div>
+                    )}
+
+                    {/* 输入短码（百分比等也认） */}
+                    <textarea
+                      className={`mt-4 w-full resize-none rounded-lg px-3 py-2.5 text-sm outline-none ${isTouch ? 'min-h-11' : ''}`}
+                      style={{
+                        background: 'var(--color-card)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-separator)',
+                      }}
+                      rows={3}
+                      placeholder="粘贴短码 / 百分比…"
+                      value={relayInput}
+                      onChange={(e) => setRelayInput(e.target.value)}
+                    />
+                    <motion.button
+                      className={`mt-2 flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium ${isTouch ? 'min-h-11' : ''}`}
+                      style={{
+                        background: 'var(--color-accent)',
+                        color: '#fff',
+                        opacity: relayInput.trim() ? 1 : 0.5,
+                      }}
+                      whileHover={relayInput.trim() ? { scale: 1.02 } : undefined}
+                      whileTap={relayInput.trim() ? { scale: 0.98 } : undefined}
+                      transition={springPress}
+                      onClick={handleRelayJump}
+                      disabled={!relayInput.trim()}
+                    >
+                      跳转
+                    </motion.button>
+                  </div>
                 </div>
               )}
             </motion.nav>
@@ -1377,6 +1876,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 background: 'rgba(60, 46, 36, 0.85)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
+                // 独立全屏浮层：顶部避开状态栏/刘海，否则返回键和字号键落入防误触区。
+                // 左右仅横屏刘海时需要（竖屏 cutout 为 0），基数为 0 以免与内层 px-3 叠加。
+                paddingTop: 'calc(0.5rem + var(--safe-top))',
+                paddingLeft: 'var(--safe-left)',
+                paddingRight: 'var(--safe-right)',
               }}
             >
               <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-3">
@@ -1386,7 +1890,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 whileTap={{ scale: 0.94 }}
                 transition={springPress}
                 style={{ color: 'var(--comp-text)' }}
-                onClick={() => { setDetailEntryId(null); setSidebarTab('compendium') }}
+                onClick={() => {
+                  setDetailEntryId(null)
+                  setSidebarTab('compendium')
+                  history.replaceState({ reader: true, sidebar: 'compendium' }, '')
+                }}
                 aria-label="返回图鉴列表"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -1450,7 +1958,11 @@ export function ReaderPage({ bookId, onBack }: Props) {
                 whileTap={{ scale: 0.94 }}
                 transition={springPress}
                 style={{ color: 'var(--comp-text)' }}
-                onClick={() => { setDetailEntryId(null); setSidebarTab('compendium') }}
+                onClick={() => {
+                  setDetailEntryId(null)
+                  setSidebarTab('compendium')
+                  history.replaceState({ reader: true, sidebar: 'compendium' }, '')
+                }}
                 aria-label="关闭"
               >
                 <X className="h-5 w-5" />
@@ -1480,7 +1992,15 @@ export function ReaderPage({ bookId, onBack }: Props) {
               <div className="h-6" />
             )}
 
-            <div className="mx-auto w-full max-w-2xl px-5 pb-10 min-[1800px]:max-w-[1300px]" style={{ zoom: settings.compendiumFontScale }}>
+            <div
+              className="mx-auto w-full max-w-2xl px-5 min-[1800px]:max-w-[1300px]"
+              style={{
+                zoom: settings.compendiumFontScale,
+                paddingBottom: 'calc(2.5rem + var(--safe-bottom))',
+                paddingLeft: 'calc(1.25rem + var(--safe-left))',
+                paddingRight: 'calc(1.25rem + var(--safe-right))',
+              }}
+            >
               {/* 名字 */}
               <h1
                 className="text-2xl font-bold tracking-tight"
@@ -1550,12 +2070,6 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   </h3>
                   <div className="flex flex-wrap gap-1.5">
                     {(() => {
-                      const globalRefCount = new Map<string, number>()
-                      for (const e of compendiumEntries) {
-                        for (const r of e.relations) {
-                          globalRefCount.set(r.targetId, (globalRefCount.get(r.targetId) ?? 0) + 1)
-                        }
-                      }
                       const sorted = [...detailEntry.relations].sort((a, b) => {
                         const aTarget = getEntryById(a.targetId)
                         const bTarget = getEntryById(b.targetId)

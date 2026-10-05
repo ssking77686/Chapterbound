@@ -4,6 +4,7 @@ import type Rendition from 'epubjs/types/rendition'
 import type { NavItem } from 'epubjs/types/navigation'
 import type { IReaderEngine } from '../core/interfaces/IReaderEngine'
 import { BookFormat, type TOCItem } from '../core/types'
+import { detectTouch } from '../hooks/useIsTouch'
 
 type EventCallback = (...args: unknown[]) => void
 
@@ -15,9 +16,17 @@ export class EpubEngine implements IReaderEngine {
   private rendition: Rendition | null = null
   private containerEl: HTMLElement | null = null
   private listeners = new Map<string, Set<EventCallback>>()
+  // 触屏手势：已绑定手势的 contents（epub.js 跨 section 重建 iframe，须防重复绑定）
+  private gestureBoundContents = new Set<object>()
+  private touchStart: { x: number; y: number; t: number } | null = null
+  /** 重排后要钉回去的锚点（见 pinAfterResize） */
+  private anchorAfterResize: string | null = null
+  /** 书文件字节（位置接力码的指纹材料），load 时记下 */
+  private fileData: ArrayBuffer | null = null
 
   async load(data: ArrayBuffer, container: HTMLElement, startLoc?: string): Promise<void> {
     this.containerEl = container
+    this.fileData = data
     this.book = Epub(data) as Book
 
     const rect = container.getBoundingClientRect()
@@ -37,8 +46,16 @@ export class EpubEngine implements IReaderEngine {
       const progress = this.computeProgress(cfi)
       const page = location.start.displayed.page
       const total = location.start.displayed.total
-      console.log('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
+      // console.debug('[EpubEngine] relocated spineIndex:', location.start.index, 'page:', page, 'total:', total)
       this.emit('locationChange', cfi, progress, page, total, location.start.index)
+
+      // 重排后的第一次 relocated：把位置钉回重排前那一刻（见 pinAfterResize）。
+      // 只钉一次 —— 钉回去本身也会触发 relocated。
+      if (this.anchorAfterResize) {
+        const anchor = this.anchorAfterResize
+        this.anchorAfterResize = null
+        this.goToLocation(anchor)
+      }
     })
 
     this.rendition.on('selected', (cfiRange: string, contents: { window: { getSelection: () => Selection } }) => {
@@ -59,6 +76,15 @@ export class EpubEngine implements IReaderEngine {
       } catch { /* 选区坐标获取失败不影响选字功能 */ }
       this.emit('selection', text, cfiRange, selX, selY)
     })
+
+    // 触屏手势（B 类：仅触屏设备注册，桌面端行为零变化）
+    // iframe 内 touch 事件不冒泡，epub.js Contents 以事件名转发到 contents.on（DOM_EVENTS 含 touch 三件套）。
+    // default manager 无 tap 处理，手势无冲突；跨 section 翻页重建 iframe 后由 'rendered' 重新绑定。
+    if (detectTouch()) {
+      this.rendition.on('rendered', (_section: unknown, view: { contents?: unknown }) => {
+        if (view?.contents) this.bindGestures(view.contents)
+      })
+    }
 
     await this.book.ready
     try {
@@ -81,6 +107,10 @@ export class EpubEngine implements IReaderEngine {
     this.rendition = null
     this.containerEl = null
     this.listeners.clear()
+    this.gestureBoundContents.clear()
+    this.touchStart = null
+    this.anchorAfterResize = null
+    this.fileData = null
   }
 
   nextPage(): void {
@@ -173,14 +203,155 @@ export class EpubEngine implements IReaderEngine {
     return this.computeProgress(cfi)
   }
 
+  setColumnMode(mode: 'auto' | 'single'): void {
+    this.rendition?.spread(mode === 'single' ? 'none' : 'auto')
+  }
+
   setPageColors(colors: { background: string; text: string }): void {
     if (!this.rendition) return
     this.rendition.themes.override('color', colors.text)
     this.rendition.themes.override('background', colors.background)
   }
 
-  resize(width: number, height: number): void {
-    this.rendition?.resize(width, height)
+  /**
+   * 重排视口。**必须带上当前位置的 cfi**。
+   *
+   * epub.js 重排后会自己重新定位：`rendition.onResized` 里是
+   * `this.display(epubcfi || this.location.start.cfi)`（rendition.js:478）——
+   * 给它 cfi 就用它，不给就用它自己缓存的位置。而重排之后"第 N 页"对应的文字已经变了，
+   * 所以锚点必须由调用方给，否则阅读位置会漂（实测：只把视口高改 40px，从第 5 页跳到第 2 页）。
+   *
+   * 转屏 / 分屏 / 软键盘弹出 / 沉浸模式走的都是这一条路，锚点在这里统一处理。
+   *
+   * 第三个参数 epub.js 支持，但 v0.3.93 的 d.ts 只声明了两个（types/rendition.d.ts:123）
+   * —— 又一次类型缺口，用一次断言绕开。
+   * ⚠️ 光带 cfi 还不够，必须配套调 pinAfterResize —— 见那个方法的注释。
+   */
+  resize(width: number, height: number, cfi?: string): void {
+    const r = this.rendition
+    if (!r) return
+    ;(r.resize as unknown as (w: number, h: number, c?: string) => void)(width, height, cfi)
+  }
+
+  /**
+   * 重排后把阅读位置钉回 cfi。
+   *
+   * 为什么必须单独做这一步：epub.js 在 resize 内部**本来就会**重新定位 ——
+   * `rendition.onResized` 里是 `this.display(epubcfi || this.location.start.cfi)`
+   * （rendition.js:478），而 manager.resize 也接受并转发了这个 cfi。但实测它落不到那个位置：
+   * 锚点 `epubcfi(/6/2!/4/26/1:0)`、重排后落在 `epubcfi(/6/2!/4/8/1:0)`，退了 18 个段落
+   *（同时读过 epub.js 自己的缓存，值和锚点一致 —— 它知道该去哪，就是没去到）。
+   * 所以改成：重排产出的第一次 relocated 之后，由我们显式再 display 一次。
+   * `goToLocation` 就是书签跳转一直在走的路径，行为可靠。
+   *
+   * 转屏 / 分屏 / 软键盘 / 沉浸模式都经由 resize，所以锚点统一在这里兜。
+   */
+  pinAfterResize(cfi: string): void {
+    if (cfi) this.anchorAfterResize = cfi
+  }
+
+  // ── 位置接力（短码）：生成端与接收端共用 ──
+
+  /** 书文件字节数（位置码指纹材料） */
+  getFileSize(): number {
+    return this.fileData?.byteLength ?? 0
+  }
+
+  /** 书文件开头切片（位置码指纹材料；指纹只吃前 64KB） */
+  getFileHead(maxBytes = 65536): Uint8Array {
+    if (!this.fileData) return new Uint8Array(0)
+    return new Uint8Array(this.fileData, 0, Math.min(maxBytes, this.fileData.byteLength))
+  }
+
+  /** epub.js 定位点是否已生成（未生成时百分比 / 位置号都不可用） */
+  isLocationsReady(): boolean {
+    try {
+      return !!this.book && this.book.locations.length() > 0
+    } catch {
+      return false
+    }
+  }
+
+  /** 当前位置的定位点序号（位置码载荷），拿不到返回 -1 */
+  getCurrentLocationIndex(): number {
+    try {
+      const cfi = this.getCurrentLocation()
+      if (!cfi || !this.book || this.book.locations.length() === 0) return -1
+      const idx = this.book.locations.locationFromCfi(cfi)
+      return typeof idx === 'number' && Number.isFinite(idx) ? idx : -1
+    } catch {
+      return -1
+    }
+  }
+
+  /** 定位点序号的百分比（0~1，短码跳转后的落点提示用；与 percentageFromCfi 同一口径） */
+  getPercentForIndex(index: number): number {
+    try {
+      const n = this.book?.locations.length() ?? 0
+      if (n <= 1) return 0
+      return Math.min(1, Math.max(0, index / (n - 1)))
+    } catch {
+      return 0
+    }
+  }
+
+  /**
+   * 按百分比跳转（位置码的降级路径）。
+   * 返回"是否真的发起了跳转"：定位点未就绪等情况返回 false，由调用方报错——
+   * 位置接力里不许出现"面板关了、提示说已跳到，但其实什么都没发生"。
+   */
+  goToPercentage(p: number): boolean {
+    if (!this.book || !this.rendition || this.book.locations.length() === 0) return false
+    const clamped = Math.min(1, Math.max(0, p))
+    try {
+      const cfi = this.book.locations.cfiFromPercentage(clamped)
+      if (cfi && typeof cfi === 'string') {
+        this.rendition.display(cfi)
+        return true
+      }
+    } catch {
+      /* 定位点未就绪等情况 */
+    }
+    return false
+  }
+
+  /**
+   * 按定位点序号跳转（短码路径）。返回是否真的发起了跳转（语义同上）。
+   * 落点 = 该定位点起点 —— 定位点按书文本内容生成、与排版无关，
+   * 同一个书文件在两台设备上序号↔文本完全一致，所以短码跨设备才成立。
+   */
+  goToLocationIndex(index: number): boolean {
+    if (!this.book || !this.rendition) return false
+    const n = this.book.locations.length()
+    if (n <= 0) return false
+    const i = Math.min(n - 1, Math.max(0, Math.round(index)))
+    try {
+      const cfi = this.book.locations.cfiFromLocation(i)
+      if (cfi && typeof cfi === 'string') {
+        this.rendition.display(cfi)
+        return true
+      }
+    } catch {
+      /* 同上 */
+    }
+    return false
+  }
+
+  /**
+   * 位置接力专用：跳转前先验证 CFI 能解析、且确实指向本书内的 section。
+   * 手抄 / 篡改的坐标不该"点了没反应"——无效返回 false，由调用方报错。
+   * （书签 / 目录走的是 goToLocation，坐标可信，不改那条路。）
+   */
+  goToRelayCfi(cfi: string): boolean {
+    if (!this.book || !this.rendition) return false
+    try {
+      const section = (this.book as any).spine.get(cfi)
+      if (!section) return false
+      this.rendition.display(cfi)
+      return true
+    } catch {
+      return false
+    }
   }
 
   async getChapterMap(): Promise<Map<number, number>> {
@@ -222,6 +393,60 @@ export class EpubEngine implements IReaderEngine {
 
   private emit(event: string, ...args: unknown[]): void {
     this.listeners.get(event)?.forEach((cb) => cb(...args))
+  }
+
+  /**
+   * 触屏手势：swipe（翻页）与 tap（点按翻页/呼出工具栏）。
+   * 事件对象为 iframe 内原始 DOM 事件（Contents 转发）。手势状态机只记录起点，
+   * touchmove 不主动 preventDefault —— touch-action: pan-y 已声明横向手势归 JS。
+   */
+  private bindGestures(contents: unknown): void {
+    const c = contents as { document: Document; on: (ev: string, cb: (e: TouchEvent) => void) => void }
+    if (this.gestureBoundContents.has(c)) return
+    this.gestureBoundContents.add(c)
+
+    // 纵向滚动保留给系统，横向滑动手势交由 JS 判定
+    try {
+      if (!c.document.head.querySelector('[data-epub-gesture]')) {
+        const style = c.document.createElement('style')
+        style.setAttribute('data-epub-gesture', '')
+        style.textContent = 'html, body { touch-action: pan-y; overscroll-behavior: none; }'
+        c.document.head.appendChild(style)
+      }
+    } catch { /* iframe 文档未就绪时跳过注入，不影响手势 */ }
+
+    c.on('touchstart', (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!t) return
+      this.touchStart = { x: t.clientX, y: t.clientY, t: Date.now() }
+    })
+
+    c.on('touchend', (e: TouchEvent) => {
+      const start = this.touchStart
+      this.touchStart = null
+      if (!start) return
+      const t = e.changedTouches[0]
+      if (!t) return
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      const dt = Date.now() - start.t
+
+      // swipe：横向位移 ≥60px、横向显著大于纵向、时长 ≤600ms
+      if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 2 && dt <= 600) {
+        this.emit('gesture:swipe', dx > 0 ? 'right' : 'left')
+        return
+      }
+
+      // tap：时长 ≤350ms、位移 ≤10px；长按选词保护 —— 选区非空时抑制
+      if (dt <= 350 && Math.abs(dx) <= 10 && Math.abs(dy) <= 10) {
+        try {
+          const selected = c.document.getSelection()?.toString() ?? ''
+          if (selected.trim().length > 0) return
+        } catch { /* 选区读取失败仍按 tap 处理 */ }
+        const width = c.document.documentElement.clientWidth || 1
+        this.emit('gesture:tap', { xRatio: t.clientX / width })
+      }
+    })
   }
 
   private computeProgress(cfi: string): number {

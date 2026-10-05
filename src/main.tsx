@@ -2,12 +2,25 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { initializeApp } from './plugins/default-plugins'
+import { applyTouchMode } from './hooks/useIsTouch'
+
+// 首次渲染前把触屏判定写到 <html data-touch>，供 CSS 读取。
+// 必须在这里而不是组件 effect 里：useEffect 在首次绘制之后才跑，触屏设备会先闪一帧桌面布局。
+applyTouchMode()
+
+// 全局异步异常兜底：未 catch 的 Promise rejection 至少被打日志
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[unhandledrejection]', event.reason)
+})
 
 initializeApp().then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   )
 }).catch((err) => {

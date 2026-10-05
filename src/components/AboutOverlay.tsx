@@ -71,7 +71,7 @@ export function AboutOverlay({ open, onClose }: Props) {
             exit={{ x: 288, opacity: 0 }}
             transition={springSlide}
           >
-            {/* 材质化标题栏 */}
+            {/* 材质化标题栏 —— 顶部安全区必须下移，否则关闭按钮落在状态栏防误触区里点不到 */}
             <div
               className="flex shrink-0 items-center justify-between px-5 py-4"
               style={{
@@ -79,6 +79,11 @@ export function AboutOverlay({ open, onClose }: Props) {
                 backdropFilter: toolbarBlur,
                 WebkitBackdropFilter: toolbarBlur,
                 borderBottom: '1px solid var(--color-separator)',
+                // 净空 = 状态栏高度 + 8px。那 8px 是给安卓顶部防误触/下拉通知区的：
+                // 它通常比状态栏本身更高，贴边那一横带点不动（历史 bug 清单里的「关闭按钮落在防误触区」）。
+                paddingTop: 'calc(1.5rem + var(--safe-top))',
+                paddingLeft: 'calc(1.25rem + var(--safe-left))',
+                paddingRight: 'calc(1.25rem + var(--safe-right))',
               }}
             >
               <h2
@@ -89,7 +94,7 @@ export function AboutOverlay({ open, onClose }: Props) {
               </h2>
               <motion.button
                 onClick={onClose}
-                className="rounded-full p-2"
+                className="icon-btn rounded-full p-2"
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.9 }}
                 transition={springPress}
@@ -100,8 +105,15 @@ export function AboutOverlay({ open, onClose }: Props) {
               </motion.button>
             </div>
 
-            {/* 内容区 */}
-            <div className="flex-1 overflow-y-auto px-5 py-6">
+            {/* 内容区 —— 底部留安全区，否则最后一行版权文字会被手势导航条压住且滚不出来 */}
+            <div
+              className="flex-1 overflow-y-auto px-5 py-6"
+              style={{
+                paddingBottom: 'calc(1.5rem + var(--safe-bottom))',
+                paddingLeft: 'calc(1.25rem + var(--safe-left))',
+                paddingRight: 'calc(1.25rem + var(--safe-right))',
+              }}
+            >
               {/* 项目图标 + 名称 */}
               <motion.div
                 className="mb-8 text-center"

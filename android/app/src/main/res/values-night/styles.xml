@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 夜间模式：状态栏跟随应用深色纸色调 -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+        <item name="android:statusBarColor">@color/statusBarDark</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

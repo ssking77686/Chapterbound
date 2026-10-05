@@ -51,6 +51,11 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
     }
     const format = formatMap[ext ?? ''] ?? BookFormat.UNKNOWN
 
+    // 仅接受有对应引擎的格式（当前只有 EPUB）——无引擎的书导入后打开必失败
+    if (!registry.getEngine(format)) {
+      throw new Error('仅支持 EPUB 格式')
+    }
+
     // 提取元数据（EPUB 才有 parser，其他格式用基础信息）
     let title = file.name.replace(/\.[^.]+$/, '')
     let author = 'Unknown'
@@ -71,7 +76,6 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
     }
 
     const id = crypto.randomUUID()
-    await storage.saveFileData(id, buffer)
 
     const book: BookRecord = {
       id,
@@ -85,7 +89,13 @@ export const useBookshelfStore = create<BookshelfState>((set, get) => ({
       addedAt: Date.now(),
     }
 
-    await storage.saveBook(book)
+    await storage.saveFileData(id, buffer)
+    try {
+      await storage.saveBook(book)
+    } catch (err) {
+      await storage.deleteFileData(id).catch(() => {})
+      throw err
+    }
     await get().loadBooks()
   },
 

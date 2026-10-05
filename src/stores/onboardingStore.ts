@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 
-const STORAGE_KEY = 'ereader-onboarding-v1'
+const STORAGE_KEY = 'ereader-onboarding-dismissed-v1'
 
-function loadCompleted(): boolean {
+function loadDismissed(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) === 'true'
   } catch {
@@ -10,25 +10,26 @@ function loadCompleted(): boolean {
   }
 }
 
-function saveCompleted() {
+function saveDismissed() {
   try {
     localStorage.setItem(STORAGE_KEY, 'true')
   } catch { /* ignore */ }
 }
 
 interface OnboardingState {
-  hasCompleted: boolean
+  dismissedPermanently: boolean
   isActive: boolean
   currentStep: number
   pendingNavigation: 'reader' | null
   start: () => void
   advance: () => void
   skip: () => void
+  dismissForever: () => void
   clearNavigation: () => void
 }
 
 export const useOnboardingStore = create<OnboardingState>((set, get) => ({
-  hasCompleted: loadCompleted(),
+  dismissedPermanently: loadDismissed(),
   isActive: false,
   currentStep: 0,
   pendingNavigation: null,
@@ -42,17 +43,20 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     if (next === 5) {
       set({ currentStep: next, pendingNavigation: 'reader' })
     } else if (next >= 9) {
-      // All 9 steps done
-      saveCompleted()
-      set({ isActive: false, hasCompleted: true })
+      // All 9 steps done — just hide, don't persist
+      set({ isActive: false })
     } else {
       set({ currentStep: next })
     }
   },
 
   skip: () => {
-    saveCompleted()
-    set({ isActive: false, hasCompleted: true, pendingNavigation: null })
+    set({ isActive: false, pendingNavigation: null })
+  },
+
+  dismissForever: () => {
+    saveDismissed()
+    set({ isActive: false, dismissedPermanently: true, pendingNavigation: null })
   },
 
   clearNavigation: () => set({ pendingNavigation: null }),
