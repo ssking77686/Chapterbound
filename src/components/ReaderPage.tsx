@@ -1766,7 +1766,7 @@ export function ReaderPage({ bookId, onBack }: Props) {
                   </div>
 
                   {/* 位置接力 —— 跨设备手动搬运阅读位置（无需云同步） */}
-                  <div className="border-t pt-6" style={{ borderColor: 'var(--color-separator)' }}>
+                  <div className="border-t pt-6" style={{ borderColor: 'var(--color-separator)' }} data-onboarding-id="relay-section">
                     <p
                       className="mb-2 text-xs font-medium tracking-[0.005em]"
                       style={{ color: 'var(--color-text-secondary)' }}

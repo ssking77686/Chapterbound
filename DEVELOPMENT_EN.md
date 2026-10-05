@@ -86,7 +86,7 @@ Eight independent stores:
 | `progressStore` | Reading position save/load, per-bookId |
 | `settingsStore` | Reader settings + page theme + compendium font scale, persisted to localStorage |
 | `compendiumStore` | Compendium import/load/unlock/search |
-| `onboardingStore` | Onboarding guide state, localStorage persistence, cross-page navigation |
+| `onboardingStore` | Onboarding guide state (platform-filtered desktop/touch step sets), localStorage persistence, cross-page navigation |
 | `toastStore` | Toast notifications: success/error/info, auto-dismiss |
 
 ### Design System

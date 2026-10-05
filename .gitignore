@@ -28,7 +28,9 @@ dist-ssr
 !public/compendium-list.png
 !public/compendium-detail.png
 !public/compendium-location.png
+!public/app-icon.png
 !src-tauri/icons/*.png
+!android/app/src/main/res/mipmap-*/*.png
 
 # Tauri build artifacts
 src-tauri/target/

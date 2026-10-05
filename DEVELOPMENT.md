@@ -86,7 +86,7 @@ console/            # 检查台实现（audit.ts 判据 / viewports.ts 档位 / 
 | `progressStore` | 阅读位置保存/加载，按 bookId |
 | `settingsStore` | 阅读器设置 + 页面主题 + 图鉴字号，持久化到 localStorage |
 | `compendiumStore` | 图鉴导入/加载/解锁/搜索 |
-| `onboardingStore` | 入门引导状态，localStorage 持久化，跨页面导航 |
+| `onboardingStore` | 入门引导状态（步骤集按 platform 分桌面/触屏两套），localStorage 持久化，跨页面导航 |
 | `toastStore` | Toast 通知：success/error/info 三类型，auto-dismiss |
 
 ### 设计系统

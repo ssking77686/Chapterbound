@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { ScrollText, User, MapPin, BookOpen } from 'lucide-react'
+import { ScrollText, User, MapPin, ArrowLeft, List, Settings } from 'lucide-react'
 import { useOnboardingStore } from '../stores/onboardingStore'
 import { useBookshelfStore } from '../stores/bookshelfStore'
-import { steps } from '../data/onboardingSteps'
+import { getOnboardingSteps } from '../data/onboardingSteps'
 import { useIsTouch } from '../hooks/useIsTouch'
 
 const CARD_W = 300
@@ -24,6 +24,9 @@ const STAR_PARTICLES = [
 
 const springDefault = { type: 'spring' as const, bounce: 0, duration: 0.3 }
 const springPress = { type: 'spring' as const, bounce: 0, duration: 0.2 }
+
+// 沉浸模式演示卡的循环时长（秒）—— 各元素的 times 数组都按这个周期对齐
+const IMMERSIVE_DEMO_DUR = 5.2
 
 interface Cutout {
   x: number
@@ -87,17 +90,13 @@ export function OnboardingOverlay() {
   const booksCount = useBookshelfStore((s) => s.books.length)
   const isTouch = useIsTouch()
 
-  const baseStep = steps[currentStep]
-  // 触屏下翻页按钮被手势接管而隐藏（page-turn-right 不再渲染）→ 该步骤改指阅读区并改文案
-  const step = isTouch && baseStep.id === 'page-turn'
-    ? {
-        ...baseStep,
-        target: 'page-area',
-        placement: 'bottom' as const,
-        description: '轻点屏幕右侧翻下一页、左侧翻上一页，左右滑动也可翻页。',
-      }
-    : baseStep
+  // 两套步骤集（Win / 安卓）由 platform 标签过滤，见 onboardingSteps.ts 的不变量注释
+  const activeSteps = useMemo(() => getOnboardingSteps(isTouch), [isTouch])
+  const step = activeSteps[currentStep]
   const hasSpotlight = step.target !== ''
+
+  // 推进统一入口：把当前生效步骤集的总长度告诉 store（两套长度不同，store 不硬编码）
+  const goNext = useCallback(() => advance(activeSteps.length), [advance, activeSteps.length])
 
   const [targetRect, setTargetRect] = useState<Cutout | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -107,19 +106,19 @@ export function OnboardingOverlay() {
   // Step 1: advance when a new book is imported
   useEffect(() => {
     if (currentStep !== 1) return
-    if (booksCount > initialBookCount.current) advance()
-  }, [currentStep, booksCount, advance])
+    if (booksCount > initialBookCount.current) goNext()
+  }, [currentStep, booksCount, goNext])
 
   // Step 2: advance when AboutOverlay opens (repo-link appears in DOM)
   useEffect(() => {
     if (currentStep !== 2) return
     const id = setInterval(() => {
       if (document.querySelector('[data-onboarding-id="repo-link"]')) {
-        advance()
+        goNext()
       }
     }, 100)
     return () => clearInterval(id)
-  }, [currentStep, advance])
+  }, [currentStep, goNext])
 
   // Continuously track target element position (poll + scroll + resize)
   useEffect(() => {
@@ -144,6 +143,30 @@ export function OnboardingOverlay() {
     return () => cancelAnimationFrame(raf)
   }, [step.target, hasSpotlight])
 
+  // 目标若不在视口内（如设置面板底部的「位置接力」区）：进入该步时一次性滚到可见处。
+  // 反向同样生效：从滚到底部的 relay 步进入 compendium 步时，tab 栏（在滚动容器内、非 sticky）会被滚回可见。
+  //
+  // ⚠️ 先等一拍（150ms）再判断，不做同步首查：进入步骤的那一击里可能还有**其它 handler 改布局**——
+  // 实测 relay 步点击「生成短码」时，短码块在同一次点击的后半段才提交，早于它的可见性判断落在旧布局上，
+  // 对 compendium tab 的 scrollIntoView 被随后的布局变化打断、静默未滚。等到布局落定再判断。
+  useEffect(() => {
+    if (!hasSpotlight) return
+    let scrolled = false
+    const attempt = () => {
+      const el = document.querySelector(`[data-onboarding-id="${step.target}"]`)
+      if (!el) return false
+      const r = el.getBoundingClientRect()
+      const fullyVisible = r.top >= 0 && r.bottom <= window.innerHeight
+      if (!fullyVisible && !scrolled) {
+        scrolled = true
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }
+      return true
+    }
+    const id = setInterval(() => { if (attempt()) clearInterval(id) }, 150)
+    return () => clearInterval(id)
+  }, [step.target, hasSpotlight, currentStep])
+
   // Measure actual card height for accurate positioning
   useEffect(() => {
     const el = cardRef.current
@@ -155,16 +178,16 @@ export function OnboardingOverlay() {
     return () => ro.disconnect()
   }, [step.id])
 
-  // Click-to-advance: only for steps that need it (3:repo-link, 5:page-turn, 6:settings, 7:compendium).
+  // Click-to-advance: only for steps that need it (3:repo-link, 5:page-turn, 6:settings, 7:relay, 8:compendium).
   // Steps 1 (import) and 2 (about) use outcome detection instead.
   const attachClick = useCallback(() => {
     if (!step.target || currentStep <= 2) return
     const el = document.querySelector(`[data-onboarding-id="${step.target}"]`)
     if (!el) return false
-    const handler = () => advance()
+    const handler = () => goNext()
     el.addEventListener('click', handler, { once: true })
     return true
-  }, [step.target, currentStep, advance])
+  }, [step.target, currentStep, goNext])
 
   useEffect(() => {
     if (!step.target || currentStep <= 2) return
@@ -285,16 +308,14 @@ export function OnboardingOverlay() {
       >
         {isWelcome ? (
           <>
-            <motion.div
-              className="flex h-20 w-20 items-center justify-center rounded-2xl mb-1"
-              style={{
-                background: 'rgba(184,124,75,0.1)',
-              }}
+            <motion.img
+              src="./app-icon.png"
+              alt="Chapterbound"
+              className="mb-1 h-20 w-20"
+              style={{ borderRadius: 18 }}
               animate={{ boxShadow: ['0 0 16px rgba(184,124,75,0.1)', '0 0 40px rgba(184,124,75,0.28)', '0 0 16px rgba(184,124,75,0.1)'] }}
               transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <BookOpen className="h-9 w-9" style={{ color: 'var(--color-accent)' }} />
-            </motion.div>
+            />
             <p
               className="font-medium tracking-widest"
               style={{ color: 'var(--color-text-secondary)', fontSize: '0.6875rem', textTransform: 'uppercase' }}
@@ -334,7 +355,7 @@ export function OnboardingOverlay() {
         <div className={isWelcome ? 'flex items-center justify-center pt-2' : 'flex items-center justify-between pt-1'}>
           {!isWelcome && (
             <div className="flex items-center gap-1.5">
-              {steps.map((_, i) => (
+              {activeSteps.map((_, i) => (
                 <div
                   key={i}
                   className="rounded-full transition-all"
@@ -360,7 +381,7 @@ export function OnboardingOverlay() {
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
-                onClick={advance}
+                onClick={goNext}
               >
                 开始教程
               </motion.button>
@@ -372,7 +393,7 @@ export function OnboardingOverlay() {
                 不再显示引导
               </button>
             </div>
-          ) : currentStep < steps.length - 1 ? (
+          ) : currentStep < activeSteps.length - 1 ? (
             currentStep === 4 ? (
               <motion.button
                 className="rounded-full px-5 py-2 text-sm font-semibold text-white"
@@ -380,7 +401,7 @@ export function OnboardingOverlay() {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
-                onClick={advance}
+                onClick={goNext}
               >
                 开始探索
               </motion.button>
@@ -391,7 +412,7 @@ export function OnboardingOverlay() {
                 whileHover={{ background: 'rgba(60,50,38,0.06)' }}
                 whileTap={{ scale: 0.96 }}
                 transition={springPress}
-                onClick={advance}
+                onClick={goNext}
               >
                 跳过
               </motion.button>
@@ -403,7 +424,7 @@ export function OnboardingOverlay() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.96 }}
               transition={springPress}
-              onClick={advance}
+              onClick={goNext}
             >
               开始阅读
             </motion.button>
@@ -411,8 +432,8 @@ export function OnboardingOverlay() {
         </div>
       </motion.div>
 
-      {/* Step 8 (last): text search demo — sequential animation */}
-      {currentStep === 8 && (
+      {/* 文字选中搜索演示 — 循环动画（步骤集分叉后索引不固定，按 id 判断） */}
+      {step.id === 'text-search' && (
         <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 101, pointerEvents: 'none' }}>
           <motion.div
             className="overflow-hidden"
@@ -528,6 +549,85 @@ export function OnboardingOverlay() {
                 </motion.div>
               ))}
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 触屏套末步：沉浸模式演示 — 循环动画（点正文中间 → 顶栏/页码隐去 → 再点恢复） */}
+      {step.id === 'immersive' && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 101, pointerEvents: 'none' }}>
+          <motion.div
+            className="relative overflow-hidden"
+            style={{
+              width: Math.min(360, windowSize.w - 32),
+              background: 'var(--color-page-bg)',
+              borderRadius: 20,
+              boxShadow: '0 16px 48px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)',
+              pointerEvents: 'none',
+            }}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ ...springDefault, delay: 0.1 }}
+          >
+            {/* 迷你顶栏 — 点中间后隐去 */}
+            <motion.div
+              className="flex items-center gap-2 px-3.5 pt-3.5 pb-1.5"
+              animate={{ opacity: [1, 1, 1, 0, 0, 0, 0, 1, 1], y: [0, 0, 0, -6, -6, -6, -6, 0, 0] }}
+              transition={{ duration: IMMERSIVE_DEMO_DUR, repeat: Infinity, times: [0, 0.24, 0.32, 0.4, 0.66, 0.72, 0.8, 0.88, 1], ease: 'easeInOut' }}
+            >
+              <span className="flex h-6 w-6 items-center justify-center" style={{ color: 'var(--color-text)' }}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </span>
+              <span className="flex-1 truncate text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                星砂镇
+              </span>
+              <List className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+              <ScrollText className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+              <Settings className="h-3.5 w-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+            </motion.div>
+
+            {/* 阅读卡 — 顶栏隐去后「多出来的」正文淡入 */}
+            <div className="relative px-3 pt-1 pb-4">
+              <div className="relative px-4 py-3" style={{ background: 'var(--color-card)', borderRadius: 12, boxShadow: 'var(--shadow-card)' }}>
+                <p className="select-none text-xs" style={{ color: 'var(--color-text)', lineHeight: 2.1 }}>
+                  林默踏入山谷中的小镇。老人抬起头，她自称姓苏婆婆。镇上只有观星台那边有空房——
+                </p>
+                <motion.p
+                  className="select-none text-xs"
+                  style={{ color: 'var(--color-text)', lineHeight: 2.1 }}
+                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
+                  transition={{ duration: IMMERSIVE_DEMO_DUR, repeat: Infinity, times: [0, 0.38, 0.48, 0.66, 0.76, 1], ease: 'easeInOut' }}
+                >
+                  苏婆婆把陶罐放在窗台上，月光洒了一地，星萤绕着罐口缓缓盘旋。
+                </motion.p>
+
+                {/* 点击涟漪 — 每循环两次（隐去前 / 恢复前） */}
+                <motion.div
+                  className="absolute rounded-full"
+                  style={{ left: '50%', top: '42%', width: 40, height: 40, marginLeft: -20, marginTop: -20, border: '2px solid var(--color-accent)' }}
+                  animate={{
+                    scale: [0.5, 0.5, 1.7, 1.7, 0.5, 0.5, 1.7, 1.7, 0.5],
+                    opacity: [0, 0, 0.75, 0, 0, 0, 0.75, 0, 0],
+                  }}
+                  transition={{ duration: IMMERSIVE_DEMO_DUR, repeat: Infinity, times: [0, 0.18, 0.26, 0.32, 0.34, 0.72, 0.8, 0.86, 0.88], ease: 'easeOut' }}
+                />
+              </div>
+            </div>
+
+            {/* 页码胶囊 — 与顶栏同步隐去/恢复 */}
+            <motion.div
+              className="pointer-events-none absolute left-0 right-0 flex justify-center"
+              style={{ bottom: 10 }}
+              animate={{ opacity: [1, 1, 1, 0, 0, 0, 0, 1, 1], y: [0, 0, 0, 6, 6, 6, 6, 0, 0] }}
+              transition={{ duration: IMMERSIVE_DEMO_DUR, repeat: Infinity, times: [0, 0.24, 0.32, 0.4, 0.66, 0.72, 0.8, 0.88, 1], ease: 'easeInOut' }}
+            >
+              <span
+                className="inline-block rounded-full px-3 py-0.5 text-[10px] font-medium tracking-tight"
+                style={{ background: 'var(--color-card)', border: '1px solid var(--color-separator)', color: 'var(--color-text-secondary)' }}
+              >
+                12 / 240
+              </span>
+            </motion.div>
           </motion.div>
         </div>
       )}

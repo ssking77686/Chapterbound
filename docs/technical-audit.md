@@ -248,7 +248,7 @@ Store 方法遵循"先写后更新 UI"模式：只在 IndexedDB 写入成功后�
 | `src/index.css`（移动端段） | 四个安全区变量、触屏保底（16px，注入失败时）、`.hover-reveal` / `.icon-btn` / `.reader-touch` 工具类；触屏规则全部挂在 `[data-touch='1']` 上，**不写 `@media (hover: none)`** | CSS 变量与类 |
 | `src/components/LibraryPage.tsx` | 书架页面：书籍列表、导入/删除/封面操作 | `LibraryPage` |
 | `src/components/ReaderPage.tsx` | 阅读器页面：渲染区 + 设置/书签/高亮/图鉴/目录侧边栏；设置面板底部含**位置接力**（生成短码 / 输入跳转）；触屏含**沉浸模式**（点正文中间切换顶栏与页码） | `ReaderPage` |
-| `src/components/OnboardingOverlay.tsx` | 引导覆盖层：9 步引导、高亮定位、跳过/永久关闭 | `OnboardingOverlay` |
+| `src/components/OnboardingOverlay.tsx` | 引导覆盖层：分平台步骤集（桌面 10 步 / 触屏 11 步，platform 过滤见 `onboardingSteps.ts`）、高亮定位、跳过/永久关闭 | `OnboardingOverlay` |
 | `src/components/AboutOverlay.tsx` | 关于页面：项目信息、贡献者 | `AboutOverlay` |
 | `src/components/ErrorBoundary.tsx` | React 错误边界：捕获渲染期异常，显示友好恢复页面 | `ErrorBoundary` |
 | `src/components/ToastContainer.tsx` | Toast 通知容器：固定顶部居中，motion 动画进出 | `ToastContainer` |
@@ -323,7 +323,7 @@ ReaderPage 设置面板 onChange
 | 加一个新设置项 | `types.ts`（如需要）、`settingsStore.ts`（default + interface）、`ReaderPage.tsx`（UI 控件） |
 | 加一种新的书签颜色 | `types.ts`（如果颜色是枚举）、`bookmarkStore.ts`、`ReaderPage.tsx`（书签渲染和选择器） |
 | 加一个新的存储表 | `IndexedDBAdapter.ts`（DB 类 + 新 version + 方法）、`IStorageAdapter.ts`（接口）、`types.ts`（类型） |
-| 加一个新的引导步骤 | `OnboardingOverlay.tsx`（步骤定义数组 + 渲染逻辑）、`onboardingStore.ts`（如需要新状态） |
+| 加一个新的引导步骤 | `onboardingSteps.ts`（步骤定义 + platform 过滤，注意两套索引 0–5 的不变量）、`OnboardingOverlay.tsx`（渲染/推进逻辑；新目标需在目标组件加 `data-onboarding-id` 锚点）、`onboardingStore.ts`（如需要新状态） |
 | 加一个 toast/通知组件 | `src/components/` 新建文件、各页面引入使用 |
 | 加 Error Boundary | `src/components/` 新建文件、`main.tsx` 包裹 `<App/>` |
 | 修改电子书渲染行为 | `EpubEngine.ts`、`useReader.ts`、`ReaderPage.tsx`（阅读器容器和控件） |
